@@ -100,9 +100,9 @@ public final class MonitorUtils {
                                                                            leaderCpuUtilization.get(i));
       followerCpu.set(i, followerCpuUtil);
     }
-    for (short nwOutMetricId : KafkaMetricDef.resourceToMetricIds(Resource.NW_OUT)) {
-      followerLoad.add(nwOutMetricId, new MetricValues(aggregatedMetricValues.length()));
-    }
+    followerLoad.add(
+        KafkaMetricDef.commonMetricDefId(KafkaMetricDef.REPLICATION_BYTES_OUT_RATE),
+        new MetricValues(aggregatedMetricValues.length()));
     followerLoad.add(KafkaMetricDef.commonMetricDefId(CPU_USAGE), followerCpu);
     return followerLoad;
   }
