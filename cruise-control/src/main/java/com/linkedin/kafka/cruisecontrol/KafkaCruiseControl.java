@@ -40,6 +40,7 @@ import com.linkedin.kafka.cruisecontrol.monitor.ModelCompletenessRequirements;
 import com.linkedin.kafka.cruisecontrol.monitor.LoadMonitor;
 import com.linkedin.kafka.cruisecontrol.monitor.MonitorUtils;
 import com.linkedin.kafka.cruisecontrol.monitor.metricdefinition.KafkaMetricDef;
+import com.linkedin.kafka.cruisecontrol.monitor.sampling.MetricSampler.SamplingMode;
 import com.linkedin.kafka.cruisecontrol.monitor.task.LoadMonitorTaskRunner;
 import com.linkedin.kafka.cruisecontrol.servlet.UserTaskManager;
 import com.linkedin.kafka.cruisecontrol.servlet.response.stats.BrokerStats;
@@ -406,6 +407,14 @@ public class KafkaCruiseControl {
    */
   public void pauseMetricSampling(String reason) {
     _loadMonitor.pauseMetricSampling(reason, FORCE_PAUSE_SAMPLING);
+  }
+
+  public void setSamplingModeOngoingExecution() {
+    _loadMonitor.setSamplingMode(SamplingMode.ONGOING_EXECUTION);
+  }
+
+  public void setSamplingModeAll() {
+    _loadMonitor.setSamplingMode(SamplingMode.ALL);
   }
 
   /**

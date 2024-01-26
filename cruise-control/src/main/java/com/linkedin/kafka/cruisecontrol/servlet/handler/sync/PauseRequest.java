@@ -9,6 +9,7 @@ import com.linkedin.kafka.cruisecontrol.servlet.parameters.PauseResumeParameters
 import com.linkedin.kafka.cruisecontrol.servlet.response.PauseSamplingResult;
 import java.util.Map;
 
+import static com.linkedin.kafka.cruisecontrol.monitor.sampling.MetricSampler.SamplingMode.ONGOING_EXECUTION;
 import static com.linkedin.kafka.cruisecontrol.servlet.parameters.ParameterUtils.PAUSE_RESUME_PARAMETER_OBJECT_CONFIG;
 import static com.linkedin.cruisecontrol.common.utils.Utils.validateNotNull;
 
@@ -24,6 +25,7 @@ public class PauseRequest extends AbstractSyncRequest {
   @Override
   protected PauseSamplingResult handle() {
     _kafkaCruiseControl.pauseMetricSampling(_parameters.reason());
+    _kafkaCruiseControl.setSamplingModeOngoingExecution();
     return new PauseSamplingResult(_kafkaCruiseControl.config());
   }
 

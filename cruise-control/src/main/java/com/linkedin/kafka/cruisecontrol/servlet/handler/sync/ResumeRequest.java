@@ -23,6 +23,7 @@ public class ResumeRequest extends AbstractSyncRequest {
 
   @Override
   protected ResumeSamplingResult handle() {
+    _kafkaCruiseControl.setSamplingModeAll();
     _kafkaCruiseControl.resumeMetricSampling(_parameters.reason());
     return new ResumeSamplingResult(_kafkaCruiseControl.config());
   }
