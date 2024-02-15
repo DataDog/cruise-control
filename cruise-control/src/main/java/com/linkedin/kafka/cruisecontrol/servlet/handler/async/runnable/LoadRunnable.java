@@ -14,6 +14,9 @@ import com.linkedin.kafka.cruisecontrol.servlet.UserRequestException;
 import com.linkedin.kafka.cruisecontrol.servlet.parameters.ClusterLoadParameters;
 import com.linkedin.kafka.cruisecontrol.servlet.parameters.PartitionLoadParameters;
 import com.linkedin.kafka.cruisecontrol.servlet.response.stats.BrokerStats;
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.ObjectOutputStream;
 
 import static com.linkedin.kafka.cruisecontrol.config.constants.MonitorConfig.MIN_VALID_PARTITION_RATIO_CONFIG;
 import static com.linkedin.kafka.cruisecontrol.servlet.parameters.ParameterUtils.DEFAULT_START_TIME_FOR_CLUSTER_MODEL;
@@ -70,11 +73,20 @@ public class LoadRunnable extends OperationRunnable {
       throw new UserRequestException(String.format("Cannot set %s=true for non-JBOD Kafka clusters.", POPULATE_DISK_INFO_PARAM));
     }
 
+    ClusterModel clusterModel;
     if (_start != DEFAULT_START_TIME_FOR_CLUSTER_MODEL) {
-      return clusterModel(_modelCompletenessRequirements.minMonitoredPartitionsPercentage()).brokerStats(_kafkaCruiseControl.config());
+      clusterModel = clusterModel(_modelCompletenessRequirements.minMonitoredPartitionsPercentage());
     } else {
-      return clusterModelFromEarliest().brokerStats(_kafkaCruiseControl.config());
+      clusterModel = clusterModelFromEarliest();
     }
+
+    // Write the cluster model to disk for offline analysis
+    final var filename = String.format("/tmp/clusterModel-%d.ser", System.currentTimeMillis());
+    try (FileOutputStream fos = new FileOutputStream(filename); ObjectOutputStream oos = new ObjectOutputStream(fos)) {
+      oos.writeObject(clusterModel);
+    }
+
+    return clusterModel.brokerStats(_kafkaCruiseControl.config());
   }
 
   private boolean isClusterUsingJBOD() throws Exception {
