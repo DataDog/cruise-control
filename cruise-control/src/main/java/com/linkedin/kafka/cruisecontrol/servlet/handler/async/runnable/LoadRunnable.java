@@ -60,7 +60,7 @@ public class LoadRunnable extends OperationRunnable {
 
   @Override
   protected BrokerStats getResult() throws Exception {
-    if (!_populateDiskInfo) {
+    if (!_populateDiskInfo && _start == DEFAULT_START_TIME_FOR_CLUSTER_MODEL) {
       // Check whether the cached broker stats is still valid.
       BrokerStats cachedBrokerStats = _kafkaCruiseControl.cachedBrokerLoadStats(_allowCapacityEstimation);
       if (cachedBrokerStats != null) {
