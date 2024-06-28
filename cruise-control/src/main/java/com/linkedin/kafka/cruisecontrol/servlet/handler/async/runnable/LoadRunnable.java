@@ -60,16 +60,6 @@ public class LoadRunnable extends OperationRunnable {
 
   @Override
   protected BrokerStats getResult() throws Exception {
-    if (!_populateDiskInfo && _start == DEFAULT_START_TIME_FOR_CLUSTER_MODEL) {
-      // Check whether the cached broker stats is still valid.
-      BrokerStats cachedBrokerStats = _kafkaCruiseControl.cachedBrokerLoadStats(_allowCapacityEstimation);
-      if (cachedBrokerStats != null) {
-        return cachedBrokerStats;
-      }
-    } else if (isClusterUsingJBOD()) {
-      throw new UserRequestException(String.format("Cannot set %s=true for non-JBOD Kafka clusters.", POPULATE_DISK_INFO_PARAM));
-    }
-
     if (_start != DEFAULT_START_TIME_FOR_CLUSTER_MODEL) {
       return clusterModel(_modelCompletenessRequirements.minMonitoredPartitionsPercentage()).brokerStats(_kafkaCruiseControl.config());
     } else {
