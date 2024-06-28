@@ -14,6 +14,8 @@ import com.linkedin.kafka.cruisecontrol.servlet.UserRequestException;
 import com.linkedin.kafka.cruisecontrol.servlet.parameters.ClusterLoadParameters;
 import com.linkedin.kafka.cruisecontrol.servlet.parameters.PartitionLoadParameters;
 import com.linkedin.kafka.cruisecontrol.servlet.response.stats.BrokerStats;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import static com.linkedin.kafka.cruisecontrol.config.constants.MonitorConfig.MIN_VALID_PARTITION_RATIO_CONFIG;
 import static com.linkedin.kafka.cruisecontrol.servlet.parameters.ParameterUtils.DEFAULT_START_TIME_FOR_CLUSTER_MODEL;
@@ -24,6 +26,8 @@ import static com.linkedin.kafka.cruisecontrol.servlet.parameters.ParameterUtils
  * The async runnable to get the {@link BrokerStats} for the cluster model.
  */
 public class LoadRunnable extends OperationRunnable {
+  private static final Logger LOG = LoggerFactory.getLogger(LoadRunnable.class);
+
   protected final long _start;
   protected final long _end;
   protected final ModelCompletenessRequirements _modelCompletenessRequirements;
@@ -61,8 +65,10 @@ public class LoadRunnable extends OperationRunnable {
   @Override
   protected BrokerStats getResult() throws Exception {
     if (_start != DEFAULT_START_TIME_FOR_CLUSTER_MODEL) {
+      LOG.info("Start retrieving broker stats for the time range [{}, {}]", _start, _end);
       return clusterModel(_modelCompletenessRequirements.minMonitoredPartitionsPercentage()).brokerStats(_kafkaCruiseControl.config());
     } else {
+      LOG.info("Earliest: Start retrieving broker stats for the time range [{}, {}]", _start, _end);
       return clusterModelFromEarliest().brokerStats(_kafkaCruiseControl.config());
     }
   }
