@@ -42,6 +42,7 @@ abstract class OperationRunnable implements Runnable {
         if (!steps.isEmpty() && steps.get(0) instanceof Pending) {
           ((Pending) steps.get(0)).done();
         }
+        LOG.info("check if this is run! - {}", _future.operation());
         _future.complete(getResult());
         // If operation completes successfully (i.e with no exception thrown), record the operation finish time.
         _future.setFinishTimeNs(System.nanoTime());
