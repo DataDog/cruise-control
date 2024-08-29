@@ -331,7 +331,9 @@ public abstract class CapacityGoal extends AbstractGoal {
         Broker b = maybeApplyBalancingAction(clusterModel, replica, sortedAliveBrokersUnderCapacityLimit,
                                              ActionType.INTER_BROKER_REPLICA_MOVEMENT, optimizedGoals, optimizationOptions);
         if (b == null) {
-          LOG.debug("Failed to move replica {} to any broker in {}", replica, sortedAliveBrokersUnderCapacityLimit);
+          LOG.info("Failed to move replica {} to any broker in {}", replica, sortedAliveBrokersUnderCapacityLimit);
+        } else {
+          LOG.info("Moved replica {} from broker {} to broker {}", replica, broker, b);
         }
         // If capacity limit was not satisfied before, check if it is satisfied now.
         isUtilizationOverLimit =
