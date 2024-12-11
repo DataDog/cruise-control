@@ -42,33 +42,37 @@ class ReplicationThrottleHelper {
   static final String LEADER_THROTTLED_REPLICAS = QuotaConfigs.LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG;
   static final String FOLLOWER_THROTTLED_REPLICAS = QuotaConfigs.FOLLOWER_REPLICATION_THROTTLED_REPLICAS_CONFIG;
   public static final long CLIENT_REQUEST_TIMEOUT_MS = TimeUnit.SECONDS.toMillis(30);
-  static final int RETRIES = 30;
+  static final int RETRIES = 3;
+  static final long MAX_DELAY_MS = TimeUnit.SECONDS.toMillis(10);
 
   private final AdminClient _adminClient;
   private final Long _throttleRate;
   private final int _retries;
+  private long _maxDelayMs;
   private final Set<Integer> _deadBrokers;
 
   ReplicationThrottleHelper(AdminClient adminClient, Long throttleRate) {
-    this(adminClient, throttleRate, RETRIES);
+    this(adminClient, throttleRate, RETRIES, MAX_DELAY_MS);
   }
 
   ReplicationThrottleHelper(AdminClient adminClient, Long throttleRate, Set<Integer> deadBrokers) {
-    this(adminClient, throttleRate, RETRIES, deadBrokers);
+    this(adminClient, throttleRate, RETRIES, MAX_DELAY_MS, deadBrokers);
   }
 
   // for testing
-  ReplicationThrottleHelper(AdminClient adminClient, Long throttleRate, int retries) {
+  ReplicationThrottleHelper(AdminClient adminClient, Long throttleRate, int retries, long maxDelayMs) {
     this._adminClient = adminClient;
     this._throttleRate = throttleRate;
     this._retries = retries;
+    this._maxDelayMs = maxDelayMs;
     this._deadBrokers = new HashSet<Integer>();
   }
 
-  ReplicationThrottleHelper(AdminClient adminClient, Long throttleRate, int retries, Set<Integer> deadBrokers) {
+  ReplicationThrottleHelper(AdminClient adminClient, Long throttleRate, int retries, long maxDelayMs, Set<Integer> deadBrokers) {
     this._adminClient = adminClient;
     this._throttleRate = throttleRate;
     this._retries = retries;
+    this._maxDelayMs = maxDelayMs;
     this._deadBrokers = deadBrokers;
   }
 
@@ -368,7 +372,7 @@ class ReplicationThrottleHelper {
       } catch (ExecutionException | InterruptedException | TimeoutException e) {
         return false;
       }
-    }, _retries);
+    }, _retries, _maxDelayMs);
     if (!retryResponse) {
       throw new IllegalStateException("The following configs " + ops + " were not applied to " + cf + " within the time limit");
     }
