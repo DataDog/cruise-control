@@ -479,12 +479,13 @@ public class ReplicationThrottleHelperTest extends CCKafkaIntegrationTestHarness
   public void testWaitForConfigs() throws Exception {
     AdminClient mockAdminClient = EasyMock.strictMock(AdminClient.class);
     int retries = 3;
+    int maxDelayMs = 1000;
     // Case 1: queue more responses than RETRIES and expect checkConfigs to throw
     for (int i = 0; i < retries + 1; i++) {
       expectDescribeTopicConfigs(mockAdminClient, TOPIC0, EMPTY_CONFIG, true);
     }
     EasyMock.replay(mockAdminClient);
-    ReplicationThrottleHelper throttleHelper = new ReplicationThrottleHelper(mockAdminClient, 100L, retries);
+    ReplicationThrottleHelper throttleHelper = new ReplicationThrottleHelper(mockAdminClient, 100L, maxDelayMs, retries);
     ConfigResource cf = new ConfigResource(ConfigResource.Type.TOPIC, TOPIC0);
     assertThrows(IllegalStateException.class, () -> throttleHelper.waitForConfigs(cf, Collections.singletonList(
             new AlterConfigOp(new ConfigEntry("k", "v"), AlterConfigOp.OpType.SET)
