@@ -197,7 +197,8 @@ public final class CruiseControlMetricsUtils {
 
   /**
    * Retries the {@code Supplier<Boolean>} function while it returns {@code true} and for the specified max number of attempts.
-   * It uses {@code DEFAULT_RETRY_BACKOFF_SCALE_MS} and {@code DEFAULT_RETRY_BACKOFF_BASE} for scale and base to compute the delay.
+   * It uses {@code DEFAULT_RETRY_BACKOFF_SCALE_MS} and {@code DEFAULT_RETRY_BACKOFF_BASE} for scale and base to compute the delay,
+   * as well as {@code DEFAULT_RETRY_BACKOFF_MAX_MS} for the upper bound of delay between attempts.
    * @param function the code to call and retry if needed
    * @param maxAttempts the max number of attempts on calling the function
    * @return {@code false} if the function requires a retry, but it cannot be retried, because the max attempts have been exceeded.
@@ -209,6 +210,7 @@ public final class CruiseControlMetricsUtils {
 
   /**
    * Retries the {@code Supplier<Boolean>} function while it returns {@code true} and for the specified max number of attempts.
+<<<<<<< HEAD
    * It uses -1 as maxSleepMs, to not limit the sleep time between retries.
    * @param function the code to call and retry if needed
    * @param scaleMs the scale for computing the delay
