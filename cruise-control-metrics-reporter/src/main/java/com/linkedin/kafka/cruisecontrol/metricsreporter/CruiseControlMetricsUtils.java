@@ -29,6 +29,7 @@ public final class CruiseControlMetricsUtils {
   public static final long CLIENT_REQUEST_TIMEOUT_MS = TimeUnit.SECONDS.toMillis(10);
 
   private static final long DEFAULT_RETRY_BACKOFF_SCALE_MS = TimeUnit.SECONDS.toMillis(5);
+  private static final long DEFAULT_RETRY_BACKOFF_MAX_MS = Long.MAX_VALUE;
   private static final int DEFAULT_RETRY_BACKOFF_BASE = 2;
 
   public static final String ENV_CONFIG_PROVIDER_NAME = "env";
@@ -163,10 +164,11 @@ public final class CruiseControlMetricsUtils {
    * @param scaleMs the scale for computing the delay
    * @param base the base for computing the delay
    * @param maxAttempts the max number of attempts on calling the function
+   * @param maxDelayMs the max delay between attempts
    * @return {@code false} if the function requires a retry, but it cannot be retried, because the max attempts have been exceeded.
    * {@code true} if the function stopped requiring a retry before exceeding the max attempts.
    */
-  public static boolean retry(Supplier<Boolean> function, long scaleMs, int base, int maxAttempts) {
+  public static boolean retry(Supplier<Boolean> function, long scaleMs, int base, int maxAttempts, long maxDelayMs) {
     if (maxAttempts > 0) {
       int attempts = 0;
       long timeToSleep = scaleMs;
@@ -178,7 +180,7 @@ public final class CruiseControlMetricsUtils {
             if (++attempts == maxAttempts) {
               return false;
             }
-            timeToSleep *= base;
+            timeToSleep = Math.min(timeToSleep * base, maxDelayMs);
             Thread.sleep(timeToSleep);
           } catch (InterruptedException ignored) {
 
@@ -193,14 +195,28 @@ public final class CruiseControlMetricsUtils {
 
   /**
    * Retries the {@code Supplier<Boolean>} function while it returns {@code true} and for the specified max number of attempts.
-   * It uses {@code DEFAULT_RETRY_BACKOFF_SCALE_MS} and {@code DEFAULT_RETRY_BACKOFF_BASE} for scale and base to compute the delay.
+   * It uses {@code DEFAULT_RETRY_BACKOFF_SCALE_MS} and {@code DEFAULT_RETRY_BACKOFF_BASE} for scale and base to compute the delay,
+   * as well as {@code DEFAULT_RETRY_BACKOFF_MAX_MS} for the upper bound of delay between attempts.
    * @param function the code to call and retry if needed
    * @param maxAttempts the max number of attempts on calling the function
    * @return {@code false} if the function requires a retry, but it cannot be retried, because the max attempts have been exceeded.
    * {@code true} if the function stopped requiring a retry before exceeding the max attempts.
    */
   public static boolean retry(Supplier<Boolean> function, int maxAttempts) {
-    return retry(function, DEFAULT_RETRY_BACKOFF_SCALE_MS, DEFAULT_RETRY_BACKOFF_BASE, maxAttempts);
+    return retry(function, DEFAULT_RETRY_BACKOFF_SCALE_MS, DEFAULT_RETRY_BACKOFF_BASE, maxAttempts, DEFAULT_RETRY_BACKOFF_MAX_MS);
+  }
+
+  /**
+   * Retries the {@code Supplier<Boolean>} function while it returns {@code true} and for the specified max number of attempts.
+   * It uses {@code DEFAULT_RETRY_BACKOFF_SCALE_MS} and {@code DEFAULT_RETRY_BACKOFF_BASE} for scale and base to compute the delay.
+   * @param function the code to call and retry if needed
+   * @param maxAttempts the max number of attempts on calling the function
+   * @param maxDelayMs the max delay between attempts.
+   * @return {@code false} if the function requires a retry, but it cannot be retried, because the max attempts have been exceeded.
+   * {@code true} if the function stopped requiring a retry before exceeding the max attempts.
+   */
+  public static boolean retry(Supplier<Boolean> function, int maxAttempts, long maxDelayMs) {
+    return retry(function, DEFAULT_RETRY_BACKOFF_SCALE_MS, DEFAULT_RETRY_BACKOFF_BASE, maxAttempts, maxDelayMs);
   }
 
   /**
