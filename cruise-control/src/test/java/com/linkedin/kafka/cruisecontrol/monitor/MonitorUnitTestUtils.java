@@ -31,7 +31,7 @@ import org.apache.kafka.common.utils.LogContext;
 
 public final class MonitorUnitTestUtils {
   public static final long METADATA_REFRESH_BACKOFF = 10L;
-  public static final long METADATA_REFRESH_BACKOFF_MAX = CommonClientConfigs.DEFAULT_RETRY_BACKOFF_MAX_MS;
+  public static final long METADATA_REFRESH_BACKOFF_MAX = 15L;
   public static final long METADATA_EXPIRY_MS = 10L;
   public static final Node NODE_0 = new Node(0, "localhost", 100, "rack0");
   public static final Node NODE_1 = new Node(1, "localhost", 100, "rack1");
