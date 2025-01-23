@@ -29,6 +29,7 @@ import java.util.Set;
 import static com.linkedin.kafka.cruisecontrol.monitor.MonitorUnitTestUtils.METADATA_REFRESH_BACKOFF;
 import static com.linkedin.kafka.cruisecontrol.monitor.MonitorUnitTestUtils.METADATA_REFRESH_BACKOFF_MAX;
 import static com.linkedin.kafka.cruisecontrol.monitor.MonitorUnitTestUtils.METADATA_EXPIRY_MS;
+import static com.linkedin.kafka.cruisecontrol.monitor.MonitorUnitTestUtils.METADATA_REFRESH_BACKOFF_MAX;
 import static com.linkedin.kafka.cruisecontrol.monitor.MonitorUnitTestUtils.NODE_0;
 import static com.linkedin.kafka.cruisecontrol.monitor.MonitorUnitTestUtils.nodes;
 import static com.linkedin.kafka.cruisecontrol.monitor.MonitorUnitTestUtils.nodeIds;
