@@ -188,5 +188,5 @@ fi
 if [ "x$DAEMON_MODE" = "xtrue" ]; then
   nohup $JAVA $KAFKA_HEAP_OPTS $KAFKA_JVM_PERFORMANCE_OPTS $KAFKA_GC_LOG_OPTS $KAFKA_JMX_OPTS $KAFKA_LOG4J_OPTS -cp $CLASSPATH $KAFKA_OPTS com.linkedin.kafka.cruisecontrol.KafkaCruiseControlMain "$@" > "$CONSOLE_OUTPUT_FILE" 2>&1 < /dev/null &
 else
-  exec $JAVA $KAFKA_HEAP_OPTS $KAFKA_JVM_PERFORMANCE_OPTS $KAFKA_GC_LOG_OPTS $KAFKA_JMX_OPTS $KAFKA_LOG4J_OPTS -cp $CLASSPATH $KAFKA_OPTS com.linkedin.kafka.cruisecontrol.KafkaCruiseControlMain "$@"
+  exec $JAVA "$KAFKA_HEAP_OPTS" "$KAFKA_JVM_PERFORMANCE_OPTS" "$KAFKA_GC_LOG_OPTS" "$KAFKA_JMX_OPTS" "$KAFKA_LOG4J_OPTS" -cp "$CLASSPATH" "$KAFKA_OPTS" com.linkedin.kafka.cruisecontrol.KafkaCruiseControlMain "$@"
 fi
