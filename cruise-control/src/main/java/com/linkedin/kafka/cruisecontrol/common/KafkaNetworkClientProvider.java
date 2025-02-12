@@ -59,7 +59,8 @@ public class KafkaNetworkClientProvider implements NetworkClientProvider {
                                                                  socketSendBuffer, socketReceiveBuffer, defaultRequestTimeoutMs,
                                                                  connectionSetupTimeoutMs, connectionSetupTimeoutMaxMs, time, discoverBrokerVersions,
                                                                  apiVersions, new LogContext(), MetadataRecoveryStrategy.REBOOTSTRAP);
-      LOG.info("Using Kafka 3.8+ constructor for KafkaSever class with MetadataRecovery set to REBOOTSTRAP");
+      LOG.info("Using Kafka 3.8+ constructor for KafkaSever class with MetadataRecovery set to REBOOTSTRAP, reconnectBackoffMs: {}, reconnectBackoffMax: {}, connectionSetupTimeoutMs: {}, connectionSetupTimeoutMaxMs {}",
+          reconnectBackoffMs, reconnectBackoffMax, connectionSetupTimeoutMs, connectionSetupTimeoutMaxMs);
     } catch (NoSuchMethodException | InvocationTargetException | InstantiationException | IllegalAccessException e) {
       LOG.debug("Unable to find Kafka 3.8+ constructor for KafkaSever class", e);
     }
