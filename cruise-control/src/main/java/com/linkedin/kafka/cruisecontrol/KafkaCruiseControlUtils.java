@@ -638,9 +638,9 @@ public final class KafkaCruiseControlUtils {
     adminClientConfigs.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServersString);
     adminClientConfigs.put(AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG, configs.getInt(ExecutorConfig.ADMIN_CLIENT_REQUEST_TIMEOUT_MS_CONFIG));
     adminClientConfigs.put(AdminClientConfig.RECONNECT_BACKOFF_MS_CONFIG, configs.getLong(RECONNECT_BACKOFF_MS_CONFIG));
-    adminClientConfigs.put("reconnect.backoff.max.ms", 30000);
-    adminClientConfigs.put("socket.connection.setup.timeout.ms", 10000);
-    adminClientConfigs.put("socket.connection.setup.timeout.max.ms", 15000);
+    adminClientConfigs.put("reconnect.backoff.max.ms", 10000);
+    adminClientConfigs.put("socket.connection.setup.timeout.ms", 1000);
+    adminClientConfigs.put("socket.connection.setup.timeout.max.ms", 1000);
 
     // Add security protocol (if specified).
     try {
