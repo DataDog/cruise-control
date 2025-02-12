@@ -69,7 +69,7 @@ public class MetadataClient {
                                                   config.getString(MonitorConfig.CLIENT_ID_CONFIG),
                                                   DEFAULT_MAX_IN_FLIGHT_REQUEST,
                                                   config.getLong(MonitorConfig.RECONNECT_BACKOFF_MS_CONFIG),
-                                                  config.getLong(MonitorConfig.RECONNECT_BACKOFF_MS_CONFIG),
+        30000,
                                                   config.getInt(MonitorConfig.SEND_BUFFER_CONFIG),
                                                   config.getInt(MonitorConfig.RECEIVE_BUFFER_CONFIG),
                                                   config.getInt(MonitorConfig.REQUEST_TIMEOUT_MS_CONFIG),
