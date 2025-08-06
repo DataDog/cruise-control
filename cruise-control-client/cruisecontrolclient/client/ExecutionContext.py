@@ -20,7 +20,7 @@ class ExecutionContext:
         Endpoint.LoadEndpoint,
         Endpoint.PartitionLoadEndpoint,
         Endpoint.PauseSamplingEndpoint,
-        Endpoint.Permissions,
+        Endpoint.PermissionsEndpoint,
         Endpoint.ProposalsEndpoint,
         Endpoint.RebalanceEndpoint,
         Endpoint.RemoveBrokerEndpoint,
