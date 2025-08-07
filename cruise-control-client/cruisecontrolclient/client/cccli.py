@@ -28,6 +28,9 @@ def get_endpoint(args: argparse.Namespace,
     # removing properties, not mutating the objects which those properties reference.
     arg_dict = vars(args).copy()
 
+    if args.endpoint_subparser not in execution_context.dest_to_Endpoint:
+        raise ValueError(f"Invalid endpoint: {args.endpoint_subparser}")
+
     # If we have a broker list, we need to make it into a comma-separated list
     # and pass it to the Endpoint at instantiation.
     if 'brokers' in arg_dict:
@@ -176,7 +179,11 @@ def build_argument_parser(execution_context: ExecutionContext) -> argparse.Argum
     parser = argparse.ArgumentParser()
     parser.add_argument('-a', '--socket-address', help="The hostname[:port] of the cruise-control to interact with",
                         required=True)
+    parser.add_argument("-k", "--insecure", action='store_true', help="Disable SSL verification")
+    parser.add_argument("--ssl-cert", help="Path to SSL certificate file", default="/etc/ssl/certs")
     execution_context.non_parameter_flags.add('socket_address')
+    execution_context.non_parameter_flags.add('insecure')
+    execution_context.non_parameter_flags.add('ssl_cert')
 
     # Define subparser for the different cruise-control endpoints
     #
@@ -221,7 +228,7 @@ def main():
     cc_socket_address = args.socket_address
 
     # Retrieve the response and display it
-    json_responder = CruiseControlResponder()
+    json_responder = CruiseControlResponder(args)
     response = json_responder.retrieve_response_from_Endpoint(cc_socket_address, endpoint)
     print(response.text)
 
