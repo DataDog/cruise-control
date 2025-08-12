@@ -24,7 +24,7 @@ def generate_url_from_cc_socket_address(cc_socket_address: str, endpoint: Abstra
                   "It may be removed entirely in future versions.",
                   DeprecationWarning,
                   stacklevel=2)
-    url = f"http://{cc_socket_address}/kafkacruisecontrol/{endpoint.compose_endpoint()}"
+    url = f"https://{cc_socket_address}/kafkacruisecontrol/{endpoint.compose_endpoint()}"
     return url
 
 
@@ -40,5 +40,5 @@ def generate_base_url_from_cc_socket_address(cc_socket_address: str, endpoint: A
     :return: URL, the correct URL to perform the Endpoint's operation
              on the given cruise-control host, _excluding parameters_.
     """
-    url = f"http://{cc_socket_address}/kafkacruisecontrol/{endpoint.name}"
+    url = f"https://{cc_socket_address}/kafkacruisecontrol/{endpoint.name}"
     return url
