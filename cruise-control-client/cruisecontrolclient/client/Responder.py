@@ -19,6 +19,9 @@ from urllib.parse import urlencode
 # To inform humans about possibly too-old versions of cruise-control
 import warnings
 
+# To parse command-line arguments
+import argparse
+
 # To currectly determine version
 import re
 
@@ -29,6 +32,11 @@ class CruiseControlResponder(requests.Session):
     in order to provide the cruise-control-client with some basic
     sanity checking and session-management functionality.
     """
+
+    def __init__(self, args: argparse.Namespace):
+        super().__init__()
+        # Configure SSL verification to use system CA store
+        self.verify = args.ssl_cert if not args.insecure else False
 
     def retrieve_response(self, method, url, **kwargs) -> requests.Response:
         """
