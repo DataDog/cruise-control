@@ -9,6 +9,7 @@ import com.codahale.metrics.MetricRegistry;
 import com.codahale.metrics.Timer;
 import com.linkedin.kafka.cruisecontrol.common.Utils;
 import com.linkedin.kafka.cruisecontrol.analyzer.goals.Goal;
+import com.linkedin.kafka.cruisecontrol.analyzer.goals.AbstractGoal;
 import com.linkedin.kafka.cruisecontrol.config.BrokerSetResolver;
 import com.linkedin.kafka.cruisecontrol.config.KafkaCruiseControlConfig;
 import com.linkedin.kafka.cruisecontrol.common.KafkaCruiseControlThreadFactory;
@@ -90,6 +91,7 @@ public class GoalOptimizer implements Runnable {
   private final double _strictnessWeight;
   private final OptimizationOptionsGenerator _optimizationOptionsGenerator;
   private volatile boolean _hasUnfixableProposalOptimization;
+  private final MetricRegistry _metricRegistry;
 
   /**
    * Constructor for Goal Optimizer takes the goals as input. The order of the list determines the priority of goals
@@ -140,6 +142,7 @@ public class GoalOptimizer implements Runnable {
     _optimizationOptionsGenerator = config.getConfiguredInstance(AnalyzerConfig.OPTIMIZATION_OPTIONS_GENERATOR_CLASS_CONFIG,
                                                                  OptimizationOptionsGenerator.class,
                                                                  overrideConfigs);
+    _metricRegistry = dropwizardMetricRegistry;
   }
 
   /**
@@ -464,6 +467,9 @@ public class GoalOptimizer implements Runnable {
       long startTimeMs = _time.milliseconds();
       boolean succeeded;
       try {
+        if (goal instanceof AbstractGoal) {
+          ((AbstractGoal) goal).registerMetrics(_metricRegistry);
+        }
         succeeded = goal.optimize(clusterModel, optimizedGoals, optimizationOptions);
       } catch (OptimizationFailureException e) {
         setHasUnfixableProposalOptimization(true, goalsByPriority);
