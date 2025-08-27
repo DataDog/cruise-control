@@ -21,6 +21,9 @@ import com.linkedin.kafka.cruisecontrol.model.ClusterModel;
 import com.linkedin.kafka.cruisecontrol.model.ClusterModelStats;
 import com.linkedin.kafka.cruisecontrol.model.Disk;
 import com.linkedin.kafka.cruisecontrol.model.Replica;
+import com.codahale.metrics.Counter;
+import com.codahale.metrics.MetricRegistry;
+import com.codahale.metrics.Timer;
 import java.util.List;
 import java.util.Map;
 import java.util.SortedSet;
@@ -50,6 +53,22 @@ public abstract class AbstractGoal implements Goal {
   protected int _numWindows;
   protected double _minMonitoredPartitionPercentage;
   protected ProvisionResponse _provisionResponse;
+  
+  // JMX Metrics
+  private Counter _movementsProposed;
+  private Counter _movementsExecuted;
+  private Counter _movementsRejected;
+  private Counter _swapsProposed;
+  private Counter _swapsExecuted;
+  private Counter _swapsRejected;
+  private Counter _intraBrokerMovementsProposed;
+  private Counter _intraBrokerMovementsExecuted;
+  private Counter _intraBrokerMovementsRejected;
+  private Counter _intraBrokerSwapsProposed;
+  private Counter _intraBrokerSwapsExecuted;
+  private Counter _intraBrokerSwapsRejected;
+  private Counter _goalsRejected;
+  private Counter _selfRejections;
 
   /**
    * Constructor of Abstract Goal class sets the
@@ -72,6 +91,29 @@ public abstract class AbstractGoal implements Goal {
     _numWindows = parsedConfig.getInt(MonitorConfig.NUM_PARTITION_METRICS_WINDOWS_CONFIG);
     _minMonitoredPartitionPercentage = parsedConfig.getDouble(MonitorConfig.MIN_VALID_PARTITION_RATIO_CONFIG);
   }
+  
+  /**
+   * Set the metric registry and initialize JMX metrics for this goal.
+   * @param metricRegistry the metricRegistry to set.
+   */
+  public void registerMetrics(MetricRegistry metricRegistry) {
+    String goalName = name();
+    _movementsProposed = metricRegistry.counter(MetricRegistry.name( goalName, "movements-proposed"));
+    _movementsExecuted = metricRegistry.counter(MetricRegistry.name( goalName, "movements-executed"));
+    _movementsRejected = metricRegistry.counter(MetricRegistry.name( goalName, "movements-rejected"));
+    _swapsProposed = metricRegistry.counter(MetricRegistry.name(goalName, "swaps-proposed"));
+    _swapsExecuted = metricRegistry.counter(MetricRegistry.name(goalName, "swaps-executed"));
+    _swapsRejected = metricRegistry.counter(MetricRegistry.name(goalName, "swaps-rejected"));
+    _intraBrokerMovementsProposed = metricRegistry.counter(MetricRegistry.name(goalName, "intra-broker-movements-proposed"));
+    _intraBrokerMovementsExecuted = metricRegistry.counter(MetricRegistry.name(goalName, "intra-broker-movements-executed"));
+    _intraBrokerMovementsRejected = metricRegistry.counter(MetricRegistry.name(goalName, "intra-broker-movements-rejected"));
+    _intraBrokerSwapsProposed = metricRegistry.counter(MetricRegistry.name(goalName, "intra-broker-swaps-proposed"));
+    _intraBrokerSwapsExecuted = metricRegistry.counter(MetricRegistry.name(goalName, "intra-broker-swaps-executed"));
+    _intraBrokerSwapsRejected = metricRegistry.counter(MetricRegistry.name(goalName, "intra-broker-swaps-rejected"));
+    _selfRejections = metricRegistry.counter(MetricRegistry.name(goalName, "self-rejections"));
+    _goalsRejected = metricRegistry.counter(MetricRegistry.name(goalName, "proposals-rejected-by-goal"));
+  }
+
 
   private static boolean hasExcludedBrokersForReplicaMoveWithReplicas(ClusterModel clusterModel, OptimizationOptions optimizationOptions) {
     Set<Integer> excludedBrokers = optimizationOptions.excludedBrokersForReplicaMove();
@@ -254,21 +296,44 @@ public abstract class AbstractGoal implements Goal {
 
       if (!selfSatisfied(clusterModel, proposal)) {
         LOG.trace("Unable to self-satisfy proposal {}.", proposal);
+        if (_selfRejections != null) {
+          _selfRejections.inc();
+        }
         continue;
       }
 
+      if (_movementsProposed != null) {
+        _movementsProposed.inc();
+      }
       ActionAcceptance acceptance = AnalyzerUtils.isProposalAcceptableForOptimizedGoals(optimizedGoals, proposal, clusterModel);
       LOG.trace("Trying to apply legit and self-satisfied action {}, actionAcceptance = {}", proposal, acceptance);
       if (acceptance == ACCEPT) {
+        if (_movementsExecuted != null) {
+          _movementsExecuted.inc();
+        }
         if (action == ActionType.LEADERSHIP_MOVEMENT) {
           clusterModel.relocateLeadership(replica.topicPartition(), replica.broker().id(), broker.id());
         } else if (action == ActionType.INTER_BROKER_REPLICA_MOVEMENT) {
           clusterModel.relocateReplica(replica.topicPartition(), replica.broker().id(), broker.id());
         }
         return broker;
+      } else {
+        if (_movementsRejected != null) {
+          _movementsRejected.inc();
+        }
       }
     }
     return null;
+  }
+
+  @Override
+  public ActionAcceptance actionAcceptanceInstrumented(BalancingAction action, ClusterModel clusterModel)
+  {
+    ActionAcceptance actionAcceptance = actionAcceptance(action, clusterModel);
+    if (actionAcceptance != ACCEPT && _goalsRejected != null) {
+      _goalsRejected.inc();
+    }
+    return actionAcceptance;
   }
 
   /**
@@ -319,19 +384,36 @@ public abstract class AbstractGoal implements Goal {
       if (!selfSatisfied(clusterModel, swapProposal)) {
         // Unable to satisfy proposal for this eligible replica and the remaining eligible replicas in the list.
         LOG.trace("Unable to self-satisfy swap proposal {}.", swapProposal);
+        if (_selfRejections != null) {
+          _selfRejections.inc();
+        }
         return null;
+      }
+      
+      if (_swapsProposed != null) {
+        _swapsProposed.inc();
       }
       ActionAcceptance acceptance = AnalyzerUtils.isProposalAcceptableForOptimizedGoals(optimizedGoals, swapProposal, clusterModel);
       LOG.trace("Trying to apply legit and self-satisfied swap {}, actionAcceptance = {}.", swapProposal, acceptance);
 
       if (acceptance == ACCEPT) {
+        if (_swapsExecuted != null) {
+          _swapsExecuted.inc();
+        }
         Broker sourceBroker = sourceReplica.broker();
         clusterModel.relocateReplica(sourceReplica.topicPartition(), sourceBroker.id(), destinationBroker.id());
         clusterModel.relocateReplica(destinationReplica.topicPartition(), destinationBroker.id(), sourceBroker.id());
         return destinationReplica;
       } else if (acceptance == BROKER_REJECT) {
+        if (_swapsRejected != null) {
+          _swapsRejected.inc();
+        }
         // Unable to swap the given source replica with any replicas in the destination broker.
         return null;
+      } else {
+        if (_swapsRejected != null) {
+          _swapsRejected.inc();
+        }
       }
     }
     return null;
@@ -364,14 +446,27 @@ public abstract class AbstractGoal implements Goal {
 
       if (!selfSatisfied(clusterModel, proposal)) {
         LOG.trace("Unable to self-satisfy proposal {}.", proposal);
+        if (_selfRejections != null) {
+          _selfRejections.inc();
+        }
         continue;
       }
 
+      if (_intraBrokerMovementsProposed != null) {
+        _intraBrokerMovementsProposed.inc();
+      }
       ActionAcceptance acceptance = AnalyzerUtils.isProposalAcceptableForOptimizedGoals(optimizedGoals, proposal, clusterModel);
       LOG.trace("Trying to apply legit and self-satisfied action {}, actionAcceptance = {}", proposal, acceptance);
       if (acceptance == ACCEPT) {
+        if (_intraBrokerMovementsExecuted != null) {
+          _intraBrokerMovementsExecuted.inc();
+        }
         clusterModel.relocateReplica(replica.topicPartition(), replica.broker().id(), disk.logDir());
         return disk;
+      } else {
+        if (_intraBrokerMovementsRejected != null) {
+          _intraBrokerMovementsRejected.inc();
+        }
       }
     }
     return null;
@@ -415,15 +510,28 @@ public abstract class AbstractGoal implements Goal {
       if (!selfSatisfied(clusterModel, swapProposal)) {
         // Unable to satisfy proposal for this eligible replica and the remaining eligible replicas in the list.
         LOG.trace("Unable to self-satisfy swap proposal {}.", swapProposal);
+        if (_selfRejections != null) {
+          _selfRejections.inc();
+        }
         return null;
       }
 
+      if (_intraBrokerSwapsProposed != null) {
+        _intraBrokerSwapsProposed.inc();
+      }
       ActionAcceptance acceptance = AnalyzerUtils.isProposalAcceptableForOptimizedGoals(optimizedGoals, swapProposal, clusterModel);
       LOG.trace("Trying to apply legit and self-satisfied swap {}, actionAcceptance = {}.", swapProposal, acceptance);
       if (acceptance == ACCEPT) {
+        if (_intraBrokerSwapsExecuted != null) {
+          _intraBrokerSwapsExecuted.inc();
+        }
         clusterModel.relocateReplica(sourceReplica.topicPartition(), sourceReplica.broker().id(), destinationReplica.disk().logDir());
         clusterModel.relocateReplica(destinationReplica.topicPartition(), destinationReplica.broker().id(), sourceReplica.disk().logDir());
         return destinationReplica;
+      } else {
+        if (_intraBrokerSwapsRejected != null) {
+          _intraBrokerSwapsRejected.inc();
+        }
       }
     }
     return null;
