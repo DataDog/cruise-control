@@ -556,13 +556,13 @@ public class ReplicationThrottleHelperTest extends CCKafkaIntegrationTestHarness
     DescribeConfigsResult mockDescribeConfigsResult = EasyMock.mock(DescribeConfigsResult.class);
     KafkaFuture<Map<ConfigResource, Config>> mockFuture = EasyMock.mock(KafkaFuture.class);
     if (topicExists) {
-      EasyMock.expect(mockFuture.get(EasyMock.anyLong(), EasyMock.anyObject())).andReturn(topicConfigs);
+      EasyMock.expect(mockFuture.get(EasyMock.anyLong(), EasyMock.anyObject())).andReturn(topicConfigs).anyTimes();
     } else {
       EasyMock.expect(mockFuture.get(EasyMock.anyLong(), EasyMock.anyObject()))
-              .andThrow(new ExecutionException(new UnknownTopicOrPartitionException()));
+              .andThrow(new ExecutionException(new UnknownTopicOrPartitionException())).anyTimes();
     }
-    EasyMock.expect(mockDescribeConfigsResult.all()).andReturn(mockFuture);
-    EasyMock.expect(adminClient.describeConfigs(Collections.singletonList(cf))).andReturn(mockDescribeConfigsResult);
+    EasyMock.expect(mockDescribeConfigsResult.all()).andReturn(mockFuture).anyTimes();
+    EasyMock.expect(adminClient.describeConfigs(Collections.singletonList(cf))).andReturn(mockDescribeConfigsResult).anyTimes();
     EasyMock.replay(mockDescribeConfigsResult, mockFuture);
   }
 

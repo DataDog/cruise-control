@@ -156,7 +156,7 @@ public final class AnalyzerUtils {
     }
     return hasDiff;
   }
-
+  
   /**
    * Check whether the given proposal is acceptable for all of the given optimized goals.
    *
@@ -170,7 +170,7 @@ public final class AnalyzerUtils {
                                                                        BalancingAction proposal,
                                                                        ClusterModel clusterModel) {
     for (Goal optimizedGoal : optimizedGoals) {
-      ActionAcceptance actionAcceptance = optimizedGoal.actionAcceptance(proposal, clusterModel);
+      ActionAcceptance actionAcceptance = optimizedGoal.actionAcceptanceInstrumented(proposal, clusterModel);
       if (actionAcceptance != ACCEPT) {
         return actionAcceptance;
       }
