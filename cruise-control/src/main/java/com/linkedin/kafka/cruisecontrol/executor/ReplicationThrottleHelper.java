@@ -43,7 +43,8 @@ class ReplicationThrottleHelper {
   public static final long CLIENT_REQUEST_TIMEOUT_MS = TimeUnit.SECONDS.toMillis(30);
   static final int RETRIES = 3;
   static final long MAX_DELAY_MS = TimeUnit.SECONDS.toMillis(10);
-
+  private static final long DEFAULT_RETRY_BACKOFF_SCALE_MS = TimeUnit.SECONDS.toMillis(5);
+  private static final int DEFAULT_RETRY_BACKOFF_BASE = 2;
   private final AdminClient _adminClient;
   private final Long _throttleRate;
   private final int _retries;
@@ -372,7 +373,7 @@ class ReplicationThrottleHelper {
       } catch (ExecutionException | InterruptedException | TimeoutException e) {
         return false;
       }
-    }, _retries, _maxDelayMs);
+    }, DEFAULT_RETRY_BACKOFF_SCALE_MS, DEFAULT_RETRY_BACKOFF_BASE, _retries, (int) _maxDelayMs);
     if (!retryResponse) {
       throw new IllegalStateException("The following configs " + ops + " were not applied to " + cf + " within the time limit");
     }
