@@ -29,7 +29,6 @@ public final class CruiseControlMetricsUtils {
   public static final long CLIENT_REQUEST_TIMEOUT_MS = TimeUnit.SECONDS.toMillis(10);
 
   private static final long DEFAULT_RETRY_BACKOFF_SCALE_MS = TimeUnit.SECONDS.toMillis(5);
-  private static final long DEFAULT_RETRY_BACKOFF_MAX_MS = Long.MAX_VALUE;
   private static final int DEFAULT_RETRY_BACKOFF_BASE = 2;
 
   public static final String ENV_CONFIG_PROVIDER_NAME = "env";
