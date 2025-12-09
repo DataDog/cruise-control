@@ -210,7 +210,6 @@ public final class CruiseControlMetricsUtils {
 
   /**
    * Retries the {@code Supplier<Boolean>} function while it returns {@code true} and for the specified max number of attempts.
-<<<<<<< HEAD
    * It uses -1 as maxSleepMs, to not limit the sleep time between retries.
    * @param function the code to call and retry if needed
    * @param scaleMs the scale for computing the delay
