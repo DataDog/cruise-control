@@ -10,6 +10,7 @@ import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.AlterConfigOp;
 import org.apache.kafka.clients.admin.Config;
 import org.apache.kafka.clients.admin.ConfigEntry;
+import org.apache.kafka.clients.admin.ConfigEntry.ConfigSource;
 import org.apache.kafka.common.config.ConfigResource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -342,16 +343,18 @@ class ReplicationThrottleHelper {
     ConfigEntry currFollowerThrottle = brokerConfigs.get(FOLLOWER_REPLICATION_THROTTLED_RATE_CONFIG);
     List<AlterConfigOp> ops = new ArrayList<>();
     if (currLeaderThrottle != null) {
-      if (currLeaderThrottle.source().equals(ConfigEntry.ConfigSource.STATIC_BROKER_CONFIG)) {
-        LOG.debug("Skipping removal for static leader throttle rate: {}", currFollowerThrottle);
+      if (currLeaderThrottle.source().equals(ConfigEntry.ConfigSource.STATIC_BROKER_CONFIG)
+          || currLeaderThrottle.source().equals(ConfigSource.DYNAMIC_DEFAULT_BROKER_CONFIG)) {
+        LOG.debug("Skipping removal for global leader throttle rate: {}", currFollowerThrottle);
       } else {
         LOG.debug("Removing leader throttle rate: {} on broker {}", currLeaderThrottle, brokerId);
         ops.add(new AlterConfigOp(new ConfigEntry(LEADER_REPLICATION_THROTTLED_RATE_CONFIG, null), AlterConfigOp.OpType.DELETE));
       }
     }
     if (currFollowerThrottle != null) {
-      if (currFollowerThrottle.source().equals(ConfigEntry.ConfigSource.STATIC_BROKER_CONFIG)) {
-        LOG.debug("Skipping removal for static follower throttle rate: {}", currFollowerThrottle);
+      if (currFollowerThrottle.source().equals(ConfigEntry.ConfigSource.STATIC_BROKER_CONFIG)
+          || currFollowerThrottle.source().equals(ConfigSource.DYNAMIC_DEFAULT_BROKER_CONFIG)) {
+        LOG.debug("Skipping removal for global follower throttle rate: {}", currFollowerThrottle);
       } else {
         LOG.debug("Removing follower throttle rate: {} on broker {}", currFollowerThrottle, brokerId);
         ops.add(new AlterConfigOp(new ConfigEntry(FOLLOWER_REPLICATION_THROTTLED_RATE_CONFIG, null), AlterConfigOp.OpType.DELETE));
