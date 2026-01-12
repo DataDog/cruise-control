@@ -165,7 +165,7 @@ public class ReplicationThrottleHelperTest extends CCKafkaIntegrationTestHarness
                     ConfigEntry.ConfigSource.STATIC_BROKER_CONFIG))
     );
     // Expect that only the dynamic throttle rate configs are removed when clearing throttles
-    expectDescribeBrokerConfigs(mockAdminClient, brokers, brokerConfig);
+    expectDescribeBrokerConfigsBatch(mockAdminClient, brokers, brokerConfig);
     expectIncrementalBrokerConfigs(mockAdminClient, brokers);
     expectDescribeBrokerConfigs(mockAdminClient, brokers, brokerConfig2);
     expectDescribeTopicConfigs(mockAdminClient, TOPIC0, EMPTY_CONFIG, false);
@@ -610,34 +610,54 @@ public class ReplicationThrottleHelperTest extends CCKafkaIntegrationTestHarness
     Config brokerConfig = new Config(Arrays.asList(
       new ConfigEntry(ReplicationThrottleHelper.LEADER_REPLICATION_THROTTLED_RATE_CONFIG, "100"),
       new ConfigEntry(ReplicationThrottleHelper.FOLLOWER_REPLICATION_THROTTLED_RATE_CONFIG, "100")));
-    expectDescribeBrokerConfigs(adminClient, brokers, brokerConfig);
+    expectDescribeBrokerConfigsBatch(adminClient, brokers, brokerConfig);
   }
 
   private void expectDescribeBrokerConfigs(AdminClient adminClient, List<Integer> brokers, Config brokerConfig)
   throws ExecutionException, InterruptedException, TimeoutException {
+    // Expect individual calls for each broker (used by waitForConfigs verification)
     for (int i : brokers) {
       ConfigResource cf = new ConfigResource(ConfigResource.Type.BROKER, String.valueOf(i));
       Map<ConfigResource, Config> brokerConfigs = Collections.singletonMap(cf, brokerConfig);
       DescribeConfigsResult mockDescribeConfigsResult = EasyMock.mock(DescribeConfigsResult.class);
       KafkaFuture<Map<ConfigResource, Config>> mockFuture = EasyMock.mock(KafkaFuture.class);
-      EasyMock.expect(mockFuture.get(EasyMock.anyLong(), EasyMock.anyObject())).andReturn(brokerConfigs);
-      EasyMock.expect(mockDescribeConfigsResult.all()).andReturn(mockFuture);
-      EasyMock.expect(adminClient.describeConfigs(Collections.singletonList(cf))).andReturn(mockDescribeConfigsResult);
+      EasyMock.expect(mockFuture.get(EasyMock.anyLong(), EasyMock.anyObject())).andReturn(brokerConfigs).anyTimes();
+      EasyMock.expect(mockDescribeConfigsResult.all()).andReturn(mockFuture).anyTimes();
+      EasyMock.expect(adminClient.describeConfigs(Collections.singletonList(cf))).andReturn(mockDescribeConfigsResult).anyTimes();
       EasyMock.replay(mockDescribeConfigsResult, mockFuture);
     }
   }
 
+  private void expectDescribeBrokerConfigsBatch(AdminClient adminClient, List<Integer> brokers, Config brokerConfig)
+  throws ExecutionException, InterruptedException, TimeoutException {
+    // Create a list of ConfigResources for all brokers
+    List<ConfigResource> configResources = new ArrayList<>();
+    Map<ConfigResource, Config> brokerConfigs = new HashMap<>();
+    for (int i : brokers) {
+      ConfigResource cf = new ConfigResource(ConfigResource.Type.BROKER, String.valueOf(i));
+      configResources.add(cf);
+      brokerConfigs.put(cf, brokerConfig);
+    }
+
+    // Expect a single batched call for all brokers
+    DescribeConfigsResult mockDescribeConfigsResult = EasyMock.mock(DescribeConfigsResult.class);
+    KafkaFuture<Map<ConfigResource, Config>> mockFuture = EasyMock.mock(KafkaFuture.class);
+    EasyMock.expect(mockFuture.get(EasyMock.anyLong(), EasyMock.anyObject())).andReturn(brokerConfigs);
+    EasyMock.expect(mockDescribeConfigsResult.all()).andReturn(mockFuture);
+    EasyMock.expect(adminClient.describeConfigs(configResources)).andReturn(mockDescribeConfigsResult);
+    EasyMock.replay(mockDescribeConfigsResult, mockFuture);
+  }
+
   private void expectIncrementalBrokerConfigs(AdminClient adminClient, List<Integer> brokers)
   throws ExecutionException, InterruptedException, TimeoutException {
-    for (int brokerId : brokers) {
-      ConfigResource cf = new ConfigResource(ConfigResource.Type.BROKER, String.valueOf(brokerId));
-      AlterConfigsResult mockAlterConfigsResult = EasyMock.mock(AlterConfigsResult.class);
-      KafkaFuture<Void> mockFuture = EasyMock.mock(KafkaFuture.class);
-      EasyMock.expect(mockAlterConfigsResult.all()).andReturn(mockFuture);
-      EasyMock.expect(mockFuture.get(EasyMock.anyLong(), EasyMock.anyObject())).andReturn(null);
-      EasyMock.expect(adminClient.incrementalAlterConfigs(Collections.singletonMap(cf, EasyMock.anyObject()))).andReturn(mockAlterConfigsResult);
-      EasyMock.replay(mockAlterConfigsResult, mockFuture);
-    }
+    // Expect a single batched call for all broker config changes
+    AlterConfigsResult mockAlterConfigsResult = EasyMock.mock(AlterConfigsResult.class);
+    KafkaFuture<Void> mockFuture = EasyMock.mock(KafkaFuture.class);
+    EasyMock.expect(mockAlterConfigsResult.all()).andReturn(mockFuture);
+    EasyMock.expect(mockFuture.get(EasyMock.anyLong(), EasyMock.anyObject())).andReturn(null);
+    // Use anyObject() to match any map since the actual configs may vary
+    EasyMock.expect(adminClient.incrementalAlterConfigs(EasyMock.anyObject())).andReturn(mockAlterConfigsResult);
+    EasyMock.replay(mockAlterConfigsResult, mockFuture);
   }
 
   private void assertExpectedThrottledRateForBroker(int brokerId, Long expectedRate) throws ExecutionException, InterruptedException {

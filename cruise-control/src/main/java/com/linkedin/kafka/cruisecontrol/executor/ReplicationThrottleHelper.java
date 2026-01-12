@@ -83,12 +83,9 @@ class ReplicationThrottleHelper {
       LOG.info("Setting a rebalance throttle of {} bytes/sec", _throttleRate);
       Set<Integer> participatingBrokers = getParticipatingBrokers(replicaMovementProposals);
       Map<String, Set<String>> throttledReplicas = getThrottledReplicasByTopic(replicaMovementProposals);
-      for (int broker : participatingBrokers) {
-        setThrottledRateIfNecessary(broker);
-      }
-      for (Map.Entry<String, Set<String>> entry : throttledReplicas.entrySet()) {
-        setThrottledReplicas(entry.getKey(), entry.getValue());
-      }
+      // Use batch operations for parallel processing
+      setThrottledRateIfNecessaryBatch(participatingBrokers);
+      setThrottledReplicasBatch(throttledReplicas);
     }
   }
 
@@ -142,14 +139,11 @@ class ReplicationThrottleHelper {
       brokersToRemoveThrottlesFrom.removeAll(brokersWithInProgressTasks);
 
       LOG.info("Removing replica movement throttles from brokers in the cluster: {}", brokersToRemoveThrottlesFrom);
-      for (int broker : brokersToRemoveThrottlesFrom) {
-        removeThrottledRateFromBroker(broker);
-      }
+      // Use batch operations for parallel processing
+      removeThrottledRateFromBrokerBatch(brokersToRemoveThrottlesFrom);
 
       Map<String, Set<String>> throttledReplicas = getThrottledReplicasByTopic(completedProposals);
-      for (Map.Entry<String, Set<String>> entry : throttledReplicas.entrySet()) {
-        removeThrottledReplicasFromTopic(entry.getKey(), entry.getValue());
-      }
+      removeThrottledReplicasFromTopicBatch(throttledReplicas);
     }
   }
 
@@ -200,6 +194,48 @@ class ReplicationThrottleHelper {
     }
   }
 
+  private void setThrottledRateIfNecessaryBatch(Set<Integer> brokerIds)
+      throws ExecutionException, InterruptedException, TimeoutException {
+    if (_throttleRate == null) {
+      throw new IllegalStateException("Throttle rate cannot be null");
+    }
+
+    // Step 1: Build all broker ConfigResource objects
+    List<ConfigResource> brokerResources = brokerIds.stream()
+        .map(id -> new ConfigResource(ConfigResource.Type.BROKER, String.valueOf(id)))
+        .collect(Collectors.toList());
+
+    // Step 2: Batch fetch all broker configs
+    Map<ConfigResource, Config> brokerConfigs = getAllEntityConfigs(brokerResources);
+
+    // Step 3: Determine which brokers need config changes
+    Map<ConfigResource, Collection<AlterConfigOp>> configsToChange = new HashMap<>();
+    for (Map.Entry<ConfigResource, Config> entry : brokerConfigs.entrySet()) {
+      ConfigResource resource = entry.getKey();
+      Config config = entry.getValue();
+      List<AlterConfigOp> ops = new ArrayList<>();
+
+      for (String replicaThrottleRateConfigKey : Arrays.asList(
+          LEADER_REPLICATION_THROTTLED_RATE_CONFIG,
+          FOLLOWER_REPLICATION_THROTTLED_RATE_CONFIG)) {
+        ConfigEntry currThrottleRate = config.get(replicaThrottleRateConfigKey);
+        if (currThrottleRate == null || !currThrottleRate.value().equals(String.valueOf(_throttleRate))) {
+          LOG.debug("Setting {} to {} bytes/second for broker {}", replicaThrottleRateConfigKey, _throttleRate, resource.name());
+          ops.add(new AlterConfigOp(
+              new ConfigEntry(replicaThrottleRateConfigKey, String.valueOf(_throttleRate)),
+              AlterConfigOp.OpType.SET));
+        }
+      }
+
+      if (!ops.isEmpty()) {
+        configsToChange.put(resource, ops);
+      }
+    }
+
+    // Step 4: Batch apply all config changes
+    changeAllConfigs(configsToChange);
+  }
+
   private Config getTopicConfigs(String topic) throws ExecutionException, InterruptedException, TimeoutException {
     try {
       return getEntityConfigs(new ConfigResource(ConfigResource.Type.TOPIC, topic));
@@ -219,6 +255,61 @@ class ReplicationThrottleHelper {
     Map<ConfigResource, Config> configs = _adminClient.describeConfigs(Collections.singletonList(cf)).all()
         .get(CLIENT_REQUEST_TIMEOUT_MS, TimeUnit.MILLISECONDS);
     return configs.get(cf);
+  }
+
+  private Map<ConfigResource, Config> getAllEntityConfigs(Collection<ConfigResource> resources)
+      throws ExecutionException, InterruptedException, TimeoutException {
+    if (resources.isEmpty()) {
+      return Collections.emptyMap();
+    }
+    return _adminClient.describeConfigs(resources).all()
+        .get(CLIENT_REQUEST_TIMEOUT_MS, TimeUnit.MILLISECONDS);
+  }
+
+  private void changeAllConfigs(Map<ConfigResource, Collection<AlterConfigOp>> configs)
+      throws ExecutionException, InterruptedException, TimeoutException {
+    if (configs.isEmpty()) {
+      return;
+    }
+    _adminClient.incrementalAlterConfigs(configs).all()
+        .get(CLIENT_REQUEST_TIMEOUT_MS, TimeUnit.MILLISECONDS);
+
+    // Wait for all configs to be applied
+    for (Map.Entry<ConfigResource, Collection<AlterConfigOp>> entry : configs.entrySet()) {
+      waitForConfigs(entry.getKey(), entry.getValue());
+    }
+  }
+
+  private void changeAllTopicConfigs(Map<ConfigResource, Collection<AlterConfigOp>> configs)
+      throws ExecutionException, InterruptedException, TimeoutException {
+    if (configs.isEmpty()) {
+      return;
+    }
+
+    try {
+      _adminClient.incrementalAlterConfigs(configs).all()
+          .get(CLIENT_REQUEST_TIMEOUT_MS, TimeUnit.MILLISECONDS);
+    } catch (ExecutionException e) {
+      // Check if any topics were deleted during operation
+      for (ConfigResource resource : configs.keySet()) {
+        if (resource.type() == ConfigResource.Type.TOPIC && !topicExists(resource.name())) {
+          LOG.debug("Failed to change configs for topic {} since it does not exist", resource.name());
+          // Remove failed topic and retry with remaining
+          Map<ConfigResource, Collection<AlterConfigOp>> remaining = new HashMap<>(configs);
+          remaining.remove(resource);
+          if (!remaining.isEmpty()) {
+            changeAllTopicConfigs(remaining);
+          }
+          return;
+        }
+      }
+      throw e;
+    }
+
+    // Wait for all configs to be applied
+    for (Map.Entry<ConfigResource, Collection<AlterConfigOp>> entry : configs.entrySet()) {
+      waitForConfigs(entry.getKey(), entry.getValue());
+    }
   }
 
   private void setThrottledReplicas(String topic, Set<String> replicas)
@@ -242,6 +333,71 @@ class ReplicationThrottleHelper {
     }
     if (!ops.isEmpty()) {
       changeTopicConfigs(topic, ops);
+    }
+  }
+
+  private void setThrottledReplicasBatch(Map<String, Set<String>> replicasByTopic)
+      throws ExecutionException, InterruptedException, TimeoutException {
+
+    // Step 1: Build all topic ConfigResource objects and fetch configs with error handling
+    Map<ConfigResource, Config> topicConfigs = new HashMap<>();
+    for (String topic : replicasByTopic.keySet()) {
+      ConfigResource resource = new ConfigResource(ConfigResource.Type.TOPIC, topic);
+      try {
+        Config config = getTopicConfigs(topic);
+        topicConfigs.put(resource, config);
+      } catch (Exception e) {
+        // Topic might not exist, log and skip
+        if (!topicExists(topic)) {
+          LOG.debug("Skip setting throttled replicas for topic {} since it does not exist", topic);
+        } else {
+          throw e;
+        }
+      }
+    }
+
+    // Step 2: Determine which topics need config changes
+    Map<ConfigResource, Collection<AlterConfigOp>> configsToChange = new HashMap<>();
+    for (Map.Entry<String, Set<String>> entry : replicasByTopic.entrySet()) {
+      String topic = entry.getKey();
+      Set<String> replicas = entry.getValue();
+      ConfigResource resource = new ConfigResource(ConfigResource.Type.TOPIC, topic);
+      Config topicConfig = topicConfigs.get(resource);
+
+      if (topicConfig == null) {
+        // Topic doesn't exist
+        continue;
+      }
+
+      List<AlterConfigOp> ops = new ArrayList<>();
+      for (String replicaThrottleConfigKey : Arrays.asList(
+          LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG,
+          FOLLOWER_REPLICATION_THROTTLED_REPLICAS_CONFIG)) {
+        ConfigEntry currThrottledReplicas = topicConfig.get(replicaThrottleConfigKey);
+        if (currThrottledReplicas != null
+            && currThrottledReplicas.value().trim().equals(WILDCARD_ASTERISK)) {
+          // The existing setup throttles all replica. So, nothing needs to be changed.
+          continue;
+        }
+
+        // Merge new throttled replicas with existing configuration values.
+        Set<String> newThrottledReplicas = new TreeSet<>(replicas);
+        if (currThrottledReplicas != null && !currThrottledReplicas.value().equals("")) {
+          newThrottledReplicas.addAll(Arrays.asList(currThrottledReplicas.value().split(",")));
+        }
+        ops.add(new AlterConfigOp(
+            new ConfigEntry(replicaThrottleConfigKey, String.join(",", newThrottledReplicas)),
+            AlterConfigOp.OpType.SET));
+      }
+
+      if (!ops.isEmpty()) {
+        configsToChange.put(resource, ops);
+      }
+    }
+
+    // Step 3: Batch apply all config changes with error handling
+    if (!configsToChange.isEmpty()) {
+      changeAllTopicConfigs(configsToChange);
     }
   }
 
@@ -336,6 +492,88 @@ class ReplicationThrottleHelper {
     }
   }
 
+  private void removeThrottledReplicasFromTopicBatch(Map<String, Set<String>> replicasByTopic)
+      throws ExecutionException, InterruptedException, TimeoutException {
+
+    // Step 1: Build all topic ConfigResource objects and fetch configs
+    Map<ConfigResource, Config> topicConfigs = new HashMap<>();
+    for (String topic : replicasByTopic.keySet()) {
+      ConfigResource resource = new ConfigResource(ConfigResource.Type.TOPIC, topic);
+      try {
+        Config config = getTopicConfigs(topic);
+        if (config != null) {
+          topicConfigs.put(resource, config);
+        }
+      } catch (Exception e) {
+        LOG.debug("Skip removing throttled replicas from topic {} since no configs can be read", topic);
+      }
+    }
+
+    // Step 2: Determine which topics need replica throttle removal
+    Map<ConfigResource, Collection<AlterConfigOp>> configsToChange = new HashMap<>();
+    for (Map.Entry<String, Set<String>> entry : replicasByTopic.entrySet()) {
+      String topic = entry.getKey();
+      Set<String> replicas = entry.getValue();
+      ConfigResource resource = new ConfigResource(ConfigResource.Type.TOPIC, topic);
+      Config topicConfig = topicConfigs.get(resource);
+
+      if (topicConfig == null) {
+        LOG.debug("Skip removing throttled replicas {} from topic {} since no configs can be read",
+            String.join(",", replicas), topic);
+        continue;
+      }
+
+      List<AlterConfigOp> ops = new ArrayList<>();
+
+      ConfigEntry currentLeaderThrottledReplicas = topicConfig.get(LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG);
+      if (currentLeaderThrottledReplicas != null) {
+        if (currentLeaderThrottledReplicas.value().equals(WILDCARD_ASTERISK)) {
+          LOG.debug("Existing config throttles all leader replicas. So, do not remove any leader replica throttle");
+        } else {
+          replicas.forEach(r -> LOG.debug("Removing leader throttles for topic {} and replica {}", topic, r));
+          String newThrottledReplicas = removeReplicasFromConfig(currentLeaderThrottledReplicas.value(), replicas);
+          if (newThrottledReplicas.isEmpty()) {
+            ops.add(new AlterConfigOp(
+                new ConfigEntry(LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG, null),
+                AlterConfigOp.OpType.DELETE));
+          } else {
+            ops.add(new AlterConfigOp(
+                new ConfigEntry(LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG, newThrottledReplicas),
+                AlterConfigOp.OpType.SET));
+          }
+        }
+      }
+
+      ConfigEntry currentFollowerThrottledReplicas = topicConfig.get(FOLLOWER_REPLICATION_THROTTLED_REPLICAS_CONFIG);
+      if (currentFollowerThrottledReplicas != null) {
+        if (currentFollowerThrottledReplicas.value().equals(WILDCARD_ASTERISK)) {
+          LOG.debug("Existing config throttles all follower replicas. So, do not remove any follower replica throttle");
+        } else {
+          replicas.forEach(r -> LOG.debug("Removing follower throttles for topic {} and replica {}", topic, r));
+          String newThrottledReplicas = removeReplicasFromConfig(currentFollowerThrottledReplicas.value(), replicas);
+          if (newThrottledReplicas.isEmpty()) {
+            ops.add(new AlterConfigOp(
+                new ConfigEntry(FOLLOWER_REPLICATION_THROTTLED_REPLICAS_CONFIG, null),
+                AlterConfigOp.OpType.DELETE));
+          } else {
+            ops.add(new AlterConfigOp(
+                new ConfigEntry(FOLLOWER_REPLICATION_THROTTLED_REPLICAS_CONFIG, newThrottledReplicas),
+                AlterConfigOp.OpType.SET));
+          }
+        }
+      }
+
+      if (!ops.isEmpty()) {
+        configsToChange.put(resource, ops);
+      }
+    }
+
+    // Step 3: Batch apply all config removals
+    if (!configsToChange.isEmpty()) {
+      changeAllTopicConfigs(configsToChange);
+    }
+  }
+
   private void removeThrottledRateFromBroker(Integer brokerId)
   throws ExecutionException, InterruptedException, TimeoutException {
     Config brokerConfigs = getBrokerConfigs(brokerId);
@@ -363,6 +601,59 @@ class ReplicationThrottleHelper {
     if (!ops.isEmpty()) {
       changeBrokerConfigs(brokerId, ops);
     }
+  }
+
+  private void removeThrottledRateFromBrokerBatch(Set<Integer> brokerIds)
+      throws ExecutionException, InterruptedException, TimeoutException {
+
+    // Step 1: Build all broker ConfigResource objects
+    List<ConfigResource> brokerResources = brokerIds.stream()
+        .map(id -> new ConfigResource(ConfigResource.Type.BROKER, String.valueOf(id)))
+        .collect(Collectors.toList());
+
+    // Step 2: Batch fetch all broker configs
+    Map<ConfigResource, Config> brokerConfigs = getAllEntityConfigs(brokerResources);
+
+    // Step 3: Determine which brokers need throttle removal
+    Map<ConfigResource, Collection<AlterConfigOp>> configsToChange = new HashMap<>();
+    for (Map.Entry<ConfigResource, Config> entry : brokerConfigs.entrySet()) {
+      ConfigResource resource = entry.getKey();
+      Config config = entry.getValue();
+      List<AlterConfigOp> ops = new ArrayList<>();
+
+      ConfigEntry currLeaderThrottle = config.get(LEADER_REPLICATION_THROTTLED_RATE_CONFIG);
+      ConfigEntry currFollowerThrottle = config.get(FOLLOWER_REPLICATION_THROTTLED_RATE_CONFIG);
+
+      if (currLeaderThrottle != null) {
+        if (currLeaderThrottle.source().equals(ConfigEntry.ConfigSource.STATIC_BROKER_CONFIG)
+            || currLeaderThrottle.source().equals(ConfigSource.DYNAMIC_DEFAULT_BROKER_CONFIG)) {
+          LOG.debug("Skipping removal for global leader throttle rate: {}", currFollowerThrottle);
+        } else {
+          LOG.debug("Removing leader throttle rate: {} on broker {}", currLeaderThrottle, resource.name());
+          ops.add(new AlterConfigOp(
+              new ConfigEntry(LEADER_REPLICATION_THROTTLED_RATE_CONFIG, null),
+              AlterConfigOp.OpType.DELETE));
+        }
+      }
+      if (currFollowerThrottle != null) {
+        if (currFollowerThrottle.source().equals(ConfigEntry.ConfigSource.STATIC_BROKER_CONFIG)
+            || currFollowerThrottle.source().equals(ConfigSource.DYNAMIC_DEFAULT_BROKER_CONFIG)) {
+          LOG.debug("Skipping removal for global follower throttle rate: {}", currFollowerThrottle);
+        } else {
+          LOG.debug("Removing follower throttle rate: {} on broker {}", currFollowerThrottle, resource.name());
+          ops.add(new AlterConfigOp(
+              new ConfigEntry(FOLLOWER_REPLICATION_THROTTLED_RATE_CONFIG, null),
+              AlterConfigOp.OpType.DELETE));
+        }
+      }
+
+      if (!ops.isEmpty()) {
+        configsToChange.put(resource, ops);
+      }
+    }
+
+    // Step 4: Batch apply all config removals
+    changeAllConfigs(configsToChange);
   }
 
   // Retries until we can read the configs changes we just wrote
