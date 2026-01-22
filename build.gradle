@@ -544,6 +544,6 @@ static def getScalaBinaryVersion(versionStr) {
 
 //wrapper generation task
 wrapper {
-  gradleVersion = '8.5'
+  gradleVersion = '8.14.3'
   distributionType = Wrapper.DistributionType.ALL
 }
