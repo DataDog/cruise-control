@@ -110,7 +110,7 @@ subprojects {
 
   //code quality and inspections
   checkstyle {
-    toolVersion = '10.0'
+    toolVersion = '13.0.0'
     ignoreFailures = false
     configDirectory = file("$rootDir/checkstyle")
   }
