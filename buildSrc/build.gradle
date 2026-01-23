@@ -14,8 +14,8 @@ dependencies {
   implementation localGroovy()
 
   implementation 'org.ajoberstar:grgit:1.7.2'
-  implementation 'org.apache.httpcomponents:fluent-hc:4.5.13'
-  implementation('org.jfrog.buildinfo:build-info-extractor-gradle:4.24.14') {
+  implementation 'org.apache.httpcomponents:fluent-hc:4.5.14'
+  implementation('org.jfrog.buildinfo:build-info-extractor-gradle:4.35.6') {
     exclude module: 'groovy-all'
   }
 }
