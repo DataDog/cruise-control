@@ -101,16 +101,19 @@ subprojects {
         because("CVE-2024-29371 - transitive from Kafka")
       }
       implementation("io.netty:netty-codec-http:${nettyVersion}") {
-        because("CVE-2025-58056, CVE-2025-67735 - transitive from Vert.x")
+        because("CVE-2025-58056, CVE-2025-67735 - version floor; Vert.x may pull a newer version")
       }
       implementation("io.netty:netty-codec-http2:${nettyVersion}") {
-        because("CVE-2025-55163 - transitive from Vert.x")
+        because("CVE-2025-55163 - version floor; Vert.x may pull a newer version")
       }
       implementation("org.apache.commons:commons-lang3:3.18.0") {
         because("CVE-2025-48924 - transitive from swagger-core")
       }
       implementation("at.yawk.lz4:lz4-java:1.8.1") {
         because("CVE-2025-12183 - transitive from Kafka (relocated from org.lz4)")
+      }
+      implementation("net.minidev:json-smart:2.5.0") {
+        because("CVE-2023-1370 - transitive from json-path")
       }
     }
   }
@@ -360,9 +363,10 @@ project(':cruise-control') {
     testImplementation "org.apache.kafka:kafka-clients:$kafkaVersion:test"
     testImplementation 'commons-io:commons-io:2.14.0'
     testImplementation 'org.apache.httpcomponents:httpclient:4.5.13:tests'
-    testImplementation 'org.bouncycastle:bcpkix-jdk15on:1.70'
+    testImplementation 'org.bouncycastle:bcpkix-jdk18on:1.79'
     testImplementation 'org.apache.kerby:kerb-simplekdc:2.1.0'
-    testImplementation 'com.jayway.jsonpath:json-path:2.7.0'
+    testImplementation 'com.jayway.jsonpath:json-path:2.9.0'
+    testImplementation 'net.minidev:json-smart:2.5.0'
     testImplementation 'org.powermock:powermock-module-junit4:2.0.9'
     testImplementation 'org.powermock:powermock-api-easymock:2.0.9'
   }
@@ -501,7 +505,7 @@ project(':cruise-control-metrics-reporter') {
     implementation 'com.fasterxml.jackson.core:jackson-databind:2.16.1'
 
     testImplementation 'junit:junit:4.13.2'
-    testImplementation 'org.bouncycastle:bcpkix-jdk15on:1.70'
+    testImplementation 'org.bouncycastle:bcpkix-jdk18on:1.79'
     testImplementation 'org.powermock:powermock-module-junit4:2.0.9'
     testImplementation 'org.powermock:powermock-api-easymock:2.0.9'
     testImplementation "org.apache.kafka:kafka-clients:$kafkaVersion:test"
