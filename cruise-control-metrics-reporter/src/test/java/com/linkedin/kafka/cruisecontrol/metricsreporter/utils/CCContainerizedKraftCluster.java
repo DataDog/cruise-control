@@ -111,6 +111,10 @@ public class CCContainerizedKraftCluster implements Startable {
           brokerConfig.put("process.roles", "broker,controller");
           brokerConfig.put("controller.quorum.voters", controllerQuorumVoters);
 
+          // Override host temp paths with container-internal paths so the broker can write them
+          brokerConfig.put("log.dirs", "/tmp/kafka-logs-" + brokerNum);
+          brokerConfig.put("metadata.log.dir", "/tmp/kafka-metadata-" + brokerNum);
+
           // TestContainers automatically sets `inter.broker.listener.name` so we must disable `security.inter.broker.protocol`
           // https://kafka.apache.org/documentation/#brokerconfigs_inter.broker.listener.name
           brokerConfig.put("inter.broker.listener.name", INTERNAL_LISTENER_NAME);
@@ -191,6 +195,7 @@ public class CCContainerizedKraftCluster implements Startable {
       Path jarPath = Files.list(libsDir)
         .filter(path -> path.getFileName().toString().startsWith("cruise-control-metrics-reporter"))
         .filter(path -> path.getFileName().toString().endsWith(".jar"))
+        .filter(path -> !path.getFileName().toString().contains("-sources") && !path.getFileName().toString().contains("-javadoc"))
         .findFirst()
         .orElseThrow(() -> new IllegalStateException("Cruise Control Metrics Reporter jar not found in: " + libsDir));
 
