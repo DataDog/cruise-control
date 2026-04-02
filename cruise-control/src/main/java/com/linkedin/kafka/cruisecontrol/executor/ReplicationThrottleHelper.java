@@ -48,30 +48,31 @@ class ReplicationThrottleHelper {
   private static final int DEFAULT_RETRY_BACKOFF_BASE = 2;
   private final AdminClient _adminClient;
   private final Long _throttleRate;
+  private final boolean _skipThrottleRateSetting;
   private final int _retries;
   private long _maxDelayMs;
   private final Set<Integer> _deadBrokers;
 
-  ReplicationThrottleHelper(AdminClient adminClient, Long throttleRate) {
-    this(adminClient, throttleRate, RETRIES, MAX_DELAY_MS);
+  ReplicationThrottleHelper(AdminClient adminClient, Long throttleRate, boolean skipThrottleRateSetting) {
+    this(adminClient, throttleRate, skipThrottleRateSetting, RETRIES, MAX_DELAY_MS, new HashSet<>());
   }
 
-  ReplicationThrottleHelper(AdminClient adminClient, Long throttleRate, Set<Integer> deadBrokers) {
-    this(adminClient, throttleRate, RETRIES, MAX_DELAY_MS, deadBrokers);
+  ReplicationThrottleHelper(AdminClient adminClient, Long throttleRate, boolean skipThrottleRateSetting,
+                             Set<Integer> deadBrokers) {
+    this(adminClient, throttleRate, skipThrottleRateSetting, RETRIES, MAX_DELAY_MS, deadBrokers);
   }
 
   // for testing
-  ReplicationThrottleHelper(AdminClient adminClient, Long throttleRate, int retries, long maxDelayMs) {
-    this._adminClient = adminClient;
-    this._throttleRate = throttleRate;
-    this._retries = retries;
-    this._maxDelayMs = maxDelayMs;
-    this._deadBrokers = new HashSet<Integer>();
+  ReplicationThrottleHelper(AdminClient adminClient, Long throttleRate, boolean skipThrottleRateSetting,
+                             int retries, long maxDelayMs) {
+    this(adminClient, throttleRate, skipThrottleRateSetting, retries, maxDelayMs, new HashSet<>());
   }
 
-  ReplicationThrottleHelper(AdminClient adminClient, Long throttleRate, int retries, long maxDelayMs, Set<Integer> deadBrokers) {
+  ReplicationThrottleHelper(AdminClient adminClient, Long throttleRate, boolean skipThrottleRateSetting,
+                             int retries, long maxDelayMs, Set<Integer> deadBrokers) {
     this._adminClient = adminClient;
     this._throttleRate = throttleRate;
+    this._skipThrottleRateSetting = skipThrottleRateSetting;
     this._retries = retries;
     this._maxDelayMs = maxDelayMs;
     this._deadBrokers = deadBrokers;
@@ -79,12 +80,16 @@ class ReplicationThrottleHelper {
 
   void setThrottles(List<ExecutionProposal> replicaMovementProposals)
   throws ExecutionException, InterruptedException, TimeoutException {
-    if (throttlingEnabled()) {
-      LOG.info("Setting a rebalance throttle of {} bytes/sec", _throttleRate);
-      Set<Integer> participatingBrokers = getParticipatingBrokers(replicaMovementProposals);
+    if (throttlingEnabled() || _skipThrottleRateSetting) {
       Map<String, Set<String>> throttledReplicas = getThrottledReplicasByTopic(replicaMovementProposals);
-      for (int broker : participatingBrokers) {
-        setThrottledRateIfNecessary(broker);
+      if (throttlingEnabled() && !_skipThrottleRateSetting) {
+        LOG.info("Setting a rebalance throttle of {} bytes/sec", _throttleRate);
+        Set<Integer> participatingBrokers = getParticipatingBrokers(replicaMovementProposals);
+        for (int broker : participatingBrokers) {
+          setThrottledRateIfNecessary(broker);
+        }
+      } else {
+        LOG.info("Skipping throttle rate setting; throttled replicas will still be set");
       }
       for (Map.Entry<String, Set<String>> entry : throttledReplicas.entrySet()) {
         setThrottledReplicas(entry.getKey(), entry.getValue());
@@ -112,7 +117,7 @@ class ReplicationThrottleHelper {
   // clear throttles for a specific list of execution tasks
   void clearThrottles(List<ExecutionTask> completedTasks, List<ExecutionTask> inProgressTasks)
   throws ExecutionException, InterruptedException, TimeoutException {
-    if (throttlingEnabled()) {
+    if (throttlingEnabled() || _skipThrottleRateSetting) {
       List<ExecutionProposal> completedProposals =
         completedTasks
           .stream()
@@ -121,29 +126,31 @@ class ReplicationThrottleHelper {
           .map(ExecutionTask::proposal)
           .collect(Collectors.toList());
 
-      // These are the brokers which have completed a task with
-      // inter-broker replica movement
-      Set<Integer> participatingBrokers = getParticipatingBrokers(completedProposals);
+      if (throttlingEnabled() && !_skipThrottleRateSetting) {
+        // These are the brokers which have completed a task with
+        // inter-broker replica movement
+        Set<Integer> participatingBrokers = getParticipatingBrokers(completedProposals);
 
-      List<ExecutionProposal> inProgressProposals =
-        inProgressTasks
-          .stream()
-          .filter(this::taskIsInProgress)
-          .map(ExecutionTask::proposal)
-          .collect(Collectors.toList());
+        List<ExecutionProposal> inProgressProposals =
+          inProgressTasks
+            .stream()
+            .filter(this::taskIsInProgress)
+            .map(ExecutionTask::proposal)
+            .collect(Collectors.toList());
 
-      // These are the brokers which currently have in-progress
-      // inter-broker replica movement
-      Set<Integer> brokersWithInProgressTasks = getParticipatingBrokers(inProgressProposals);
+        // These are the brokers which currently have in-progress
+        // inter-broker replica movement
+        Set<Integer> brokersWithInProgressTasks = getParticipatingBrokers(inProgressProposals);
 
-      // Remove the brokers with in-progress replica moves from the brokers that have
-      // completed inter-broker replica moves
-      Set<Integer> brokersToRemoveThrottlesFrom = new TreeSet<>(participatingBrokers);
-      brokersToRemoveThrottlesFrom.removeAll(brokersWithInProgressTasks);
+        // Remove the brokers with in-progress replica moves from the brokers that have
+        // completed inter-broker replica moves
+        Set<Integer> brokersToRemoveThrottlesFrom = new TreeSet<>(participatingBrokers);
+        brokersToRemoveThrottlesFrom.removeAll(brokersWithInProgressTasks);
 
-      LOG.info("Removing replica movement throttles from brokers in the cluster: {}", brokersToRemoveThrottlesFrom);
-      for (int broker : brokersToRemoveThrottlesFrom) {
-        removeThrottledRateFromBroker(broker);
+        LOG.info("Removing replica movement throttles from brokers in the cluster: {}", brokersToRemoveThrottlesFrom);
+        for (int broker : brokersToRemoveThrottlesFrom) {
+          removeThrottledRateFromBroker(broker);
+        }
       }
 
       Map<String, Set<String>> throttledReplicas = getThrottledReplicasByTopic(completedProposals);

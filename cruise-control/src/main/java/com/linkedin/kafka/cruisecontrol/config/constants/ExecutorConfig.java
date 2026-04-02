@@ -94,6 +94,15 @@ public final class ExecutorConfig {
       + "moved, in bytes per second.";
 
   /**
+   * <code>skip.replication.throttle.rate.setting</code>
+   */
+  public static final String SKIP_REPLICATION_THROTTLE_RATE_SETTING_CONFIG = "skip.replication.throttle.rate.setting";
+  public static final boolean DEFAULT_SKIP_REPLICATION_THROTTLE_RATE_SETTING = false;
+  public static final String SKIP_REPLICATION_THROTTLE_RATE_SETTING_DOC = "If true, Cruise Control will set throttled "
+      + "replicas on topics during rebalances but will not set or remove throttle rates on brokers. This allows an "
+      + "external system to manage per-broker throttle rates independently.";
+
+  /**
    * <code>replica.movement.strategies</code>
    */
   public static final String REPLICA_MOVEMENT_STRATEGIES_CONFIG = "replica.movement.strategies";
@@ -548,6 +557,11 @@ public final class ExecutorConfig {
                             DEFAULT_DEFAULT_REPLICATION_THROTTLE,
                             ConfigDef.Importance.MEDIUM,
                             DEFAULT_REPLICATION_THROTTLE_DOC)
+                    .define(SKIP_REPLICATION_THROTTLE_RATE_SETTING_CONFIG,
+                            ConfigDef.Type.BOOLEAN,
+                            DEFAULT_SKIP_REPLICATION_THROTTLE_RATE_SETTING,
+                            ConfigDef.Importance.MEDIUM,
+                            SKIP_REPLICATION_THROTTLE_RATE_SETTING_DOC)
                     .define(REPLICA_MOVEMENT_STRATEGIES_CONFIG,
                             ConfigDef.Type.LIST,
                             DEFAULT_REPLICA_MOVEMENT_STRATEGIES,
