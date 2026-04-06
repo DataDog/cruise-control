@@ -80,12 +80,17 @@ class ReplicationThrottleHelper {
   void setThrottles(List<ExecutionProposal> replicaMovementProposals)
   throws ExecutionException, InterruptedException, TimeoutException {
     if (throttlingEnabled()) {
-      LOG.info("Setting a rebalance throttle of {} bytes/sec", _throttleRate);
-      Set<Integer> participatingBrokers = getParticipatingBrokers(replicaMovementProposals);
-      Map<String, Set<String>> throttledReplicas = getThrottledReplicasByTopic(replicaMovementProposals);
-      for (int broker : participatingBrokers) {
-        setThrottledRateIfNecessary(broker);
+      boolean clusterWideThrottle = hasClusterWideThrottle();
+      if (clusterWideThrottle) {
+        LOG.info("Skipping broker throttle rate: a cluster-wide replication throttle is already set externally");
+      } else {
+        LOG.info("Setting a rebalance throttle of {} bytes/sec", _throttleRate);
+        Set<Integer> participatingBrokers = getParticipatingBrokers(replicaMovementProposals);
+        for (int broker : participatingBrokers) {
+          setThrottledRateIfNecessary(broker);
+        }
       }
+      Map<String, Set<String>> throttledReplicas = getThrottledReplicasByTopic(replicaMovementProposals);
       for (Map.Entry<String, Set<String>> entry : throttledReplicas.entrySet()) {
         setThrottledReplicas(entry.getKey(), entry.getValue());
       }
@@ -113,6 +118,7 @@ class ReplicationThrottleHelper {
   void clearThrottles(List<ExecutionTask> completedTasks, List<ExecutionTask> inProgressTasks)
   throws ExecutionException, InterruptedException, TimeoutException {
     if (throttlingEnabled()) {
+      boolean clusterWideThrottle = hasClusterWideThrottle();
       List<ExecutionProposal> completedProposals =
         completedTasks
           .stream()
@@ -121,29 +127,33 @@ class ReplicationThrottleHelper {
           .map(ExecutionTask::proposal)
           .collect(Collectors.toList());
 
-      // These are the brokers which have completed a task with
-      // inter-broker replica movement
-      Set<Integer> participatingBrokers = getParticipatingBrokers(completedProposals);
+      if (clusterWideThrottle) {
+        LOG.info("Skipping broker throttle rate removal: a cluster-wide replication throttle is already set externally");
+      } else {
+        // These are the brokers which have completed a task with
+        // inter-broker replica movement
+        Set<Integer> participatingBrokers = getParticipatingBrokers(completedProposals);
 
-      List<ExecutionProposal> inProgressProposals =
-        inProgressTasks
-          .stream()
-          .filter(this::taskIsInProgress)
-          .map(ExecutionTask::proposal)
-          .collect(Collectors.toList());
+        List<ExecutionProposal> inProgressProposals =
+          inProgressTasks
+            .stream()
+            .filter(this::taskIsInProgress)
+            .map(ExecutionTask::proposal)
+            .collect(Collectors.toList());
 
-      // These are the brokers which currently have in-progress
-      // inter-broker replica movement
-      Set<Integer> brokersWithInProgressTasks = getParticipatingBrokers(inProgressProposals);
+        // These are the brokers which currently have in-progress
+        // inter-broker replica movement
+        Set<Integer> brokersWithInProgressTasks = getParticipatingBrokers(inProgressProposals);
 
-      // Remove the brokers with in-progress replica moves from the brokers that have
-      // completed inter-broker replica moves
-      Set<Integer> brokersToRemoveThrottlesFrom = new TreeSet<>(participatingBrokers);
-      brokersToRemoveThrottlesFrom.removeAll(brokersWithInProgressTasks);
+        // Remove the brokers with in-progress replica moves from the brokers that have
+        // completed inter-broker replica moves
+        Set<Integer> brokersToRemoveThrottlesFrom = new TreeSet<>(participatingBrokers);
+        brokersToRemoveThrottlesFrom.removeAll(brokersWithInProgressTasks);
 
-      LOG.info("Removing replica movement throttles from brokers in the cluster: {}", brokersToRemoveThrottlesFrom);
-      for (int broker : brokersToRemoveThrottlesFrom) {
-        removeThrottledRateFromBroker(broker);
+        LOG.info("Removing replica movement throttles from brokers in the cluster: {}", brokersToRemoveThrottlesFrom);
+        for (int broker : brokersToRemoveThrottlesFrom) {
+          removeThrottledRateFromBroker(broker);
+        }
       }
 
       Map<String, Set<String>> throttledReplicas = getThrottledReplicasByTopic(completedProposals);
@@ -155,6 +165,23 @@ class ReplicationThrottleHelper {
 
   private boolean throttlingEnabled() {
     return _throttleRate != null;
+  }
+
+  private boolean hasClusterWideThrottle() throws ExecutionException, InterruptedException, TimeoutException {
+    ConfigResource defaultBrokerResource = new ConfigResource(ConfigResource.Type.BROKER, "");
+    Config defaultBrokerConfigs = getEntityConfigs(defaultBrokerResource);
+    if (defaultBrokerConfigs == null) {
+      return false;
+    }
+    for (String throttleKey : Arrays.asList(LEADER_REPLICATION_THROTTLED_RATE_CONFIG, FOLLOWER_REPLICATION_THROTTLED_RATE_CONFIG)) {
+      ConfigEntry entry = defaultBrokerConfigs.get(throttleKey);
+      if (entry == null
+          || (!entry.source().equals(ConfigEntry.ConfigSource.DYNAMIC_DEFAULT_BROKER_CONFIG)
+              && !entry.source().equals(ConfigEntry.ConfigSource.STATIC_BROKER_CONFIG))) {
+        return false;
+      }
+    }
+    return true;
   }
 
   private Set<Integer> getParticipatingBrokers(List<ExecutionProposal> replicaMovementProposals) {
