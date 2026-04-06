@@ -116,7 +116,7 @@ public class ReplicationThrottleHelperTest extends CCKafkaIntegrationTestHarness
     EasyMock.replay(mockAdminClient);
 
     // Test would fail on any unexpected interactions with the adminClient
-    ReplicationThrottleHelper throttleHelper = new ReplicationThrottleHelper(mockAdminClient, null, false);
+    ReplicationThrottleHelper throttleHelper = new ReplicationThrottleHelper(mockAdminClient, null);
     ExecutionProposal proposal = new ExecutionProposal(new TopicPartition("topic", 0),
                                            100,
                                                        new ReplicaPlacementInfo(0),
@@ -146,7 +146,7 @@ public class ReplicationThrottleHelperTest extends CCKafkaIntegrationTestHarness
                                                        Arrays.asList(new ReplicaPlacementInfo(brokerId0), new ReplicaPlacementInfo(brokerId2)));
 
     AdminClient mockAdminClient = EasyMock.mock(AdminClient.class);
-    ReplicationThrottleHelper throttleHelper = new ReplicationThrottleHelper(mockAdminClient, throttleRate, false);
+    ReplicationThrottleHelper throttleHelper = new ReplicationThrottleHelper(mockAdminClient, throttleRate);
 
     // Case 1: a situation where Topic0 does not exist. Hence no property is returned upon read.
 
@@ -212,7 +212,7 @@ public class ReplicationThrottleHelperTest extends CCKafkaIntegrationTestHarness
                                                        Arrays.asList(new ReplicaPlacementInfo(brokerId0), new ReplicaPlacementInfo(brokerId2)));
 
     AdminClient mockAdminClient = EasyMock.strictMock(AdminClient.class);
-    ReplicationThrottleHelper throttleHelper = new ReplicationThrottleHelper(mockAdminClient, throttleRate, false);
+    ReplicationThrottleHelper throttleHelper = new ReplicationThrottleHelper(mockAdminClient, throttleRate);
 
     // Case 1: a situation where Topic0 does not exist. Hence no property is returned upon read.
     expectDescribeBrokerConfigs(mockAdminClient, brokers);
@@ -246,7 +246,7 @@ public class ReplicationThrottleHelperTest extends CCKafkaIntegrationTestHarness
     createTopics();
 
     final long throttleRate = 100L;
-    ReplicationThrottleHelper throttleHelper = new ReplicationThrottleHelper(_adminClient, throttleRate, false);
+    ReplicationThrottleHelper throttleHelper = new ReplicationThrottleHelper(_adminClient, throttleRate);
     ExecutionProposal proposal = new ExecutionProposal(new TopicPartition(TOPIC0, 0),
                                            100,
                                                        new ReplicaPlacementInfo(0),
@@ -278,7 +278,7 @@ public class ReplicationThrottleHelperTest extends CCKafkaIntegrationTestHarness
     createTopics();
 
     final long throttleRate = 100L;
-    ReplicationThrottleHelper throttleHelper = new ReplicationThrottleHelper(_adminClient, throttleRate, false);
+    ReplicationThrottleHelper throttleHelper = new ReplicationThrottleHelper(_adminClient, throttleRate);
     ExecutionProposal proposal = new ExecutionProposal(
         new TopicPartition(TOPIC0, 0),
         100,
@@ -352,7 +352,7 @@ public class ReplicationThrottleHelperTest extends CCKafkaIntegrationTestHarness
 
     final long throttleRate = 100L;
 
-    ReplicationThrottleHelper throttleHelper = new ReplicationThrottleHelper(_adminClient, throttleRate, false);
+    ReplicationThrottleHelper throttleHelper = new ReplicationThrottleHelper(_adminClient, throttleRate);
 
     // Set replica throttle config values for both topics
     setWildcardThrottleReplicaForTopic(throttleHelper, TOPIC0);
@@ -423,7 +423,7 @@ public class ReplicationThrottleHelperTest extends CCKafkaIntegrationTestHarness
 
     final long throttleRate = 100L;
 
-    ReplicationThrottleHelper throttleHelper = new ReplicationThrottleHelper(_adminClient, throttleRate, false);
+    ReplicationThrottleHelper throttleHelper = new ReplicationThrottleHelper(_adminClient, throttleRate);
     ExecutionProposal proposal = new ExecutionProposal(new TopicPartition(TOPIC0, 0),
                                            100,
                                                        new ReplicaPlacementInfo(0),
@@ -497,7 +497,7 @@ public class ReplicationThrottleHelperTest extends CCKafkaIntegrationTestHarness
       expectDescribeTopicConfigs(mockAdminClient, TOPIC0, EMPTY_CONFIG, true);
     }
     EasyMock.replay(mockAdminClient);
-    ReplicationThrottleHelper throttleHelper = new ReplicationThrottleHelper(mockAdminClient, 100L, false, retries, maxDelayMs);
+    ReplicationThrottleHelper throttleHelper = new ReplicationThrottleHelper(mockAdminClient, 100L, maxDelayMs, retries);
     ConfigResource cf = new ConfigResource(ConfigResource.Type.TOPIC, TOPIC0);
     assertThrows(IllegalStateException.class, () -> throttleHelper.waitForConfigs(cf, Collections.singletonList(
             new AlterConfigOp(new ConfigEntry("k", "v"), AlterConfigOp.OpType.SET)
