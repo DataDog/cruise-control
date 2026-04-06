@@ -1606,9 +1606,8 @@ public class Executor {
 
     private void interBrokerMoveReplicas() throws InterruptedException, ExecutionException, TimeoutException {
       Set<Integer> currentDeadBrokersWithReplicas = _loadMonitor.deadBrokersWithReplicas(MAX_METADATA_WAIT_MS);
-      boolean skipThrottleRateSetting = _config.getBoolean(ExecutorConfig.SKIP_REPLICATION_THROTTLE_RATE_SETTING_CONFIG);
       ReplicationThrottleHelper throttleHelper = new ReplicationThrottleHelper(_adminClient, _replicationThrottle,
-          skipThrottleRateSetting, currentDeadBrokersWithReplicas);
+          currentDeadBrokersWithReplicas);
       int numTotalPartitionMovements = _executionTaskManager.numRemainingInterBrokerPartitionMovements();
       long totalDataToMoveInMB = _executionTaskManager.remainingInterBrokerDataToMoveInMB();
       long startTime = System.currentTimeMillis();

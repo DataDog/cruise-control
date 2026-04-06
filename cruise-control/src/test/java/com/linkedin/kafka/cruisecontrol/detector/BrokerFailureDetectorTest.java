@@ -131,12 +131,11 @@ public class BrokerFailureDetectorTest extends CCKafkaIntegrationTestHarness {
       int brokerId = 0;
       long anomalyTime = mockTime.milliseconds();
       killBroker(brokerId);
-      // Start detection.
+      // Poll until the detector sees the failed broker or timeout.
       long start = System.currentTimeMillis();
       while (detector.failedBrokers().isEmpty() && System.currentTimeMillis() < start + 15000) {
-        // wait for the anomalies to be drained.
+        detector.run();
       }
-      detector.run();
       assertEquals(Collections.singletonMap(brokerId, 100L), detector.failedBrokers());
       failedBrokerListString = detector.loadPersistedFailedBrokerList();
       assertEquals(String.format("%d=%d", brokerId, anomalyTime), failedBrokerListString);
