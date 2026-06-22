@@ -7,6 +7,7 @@ package com.linkedin.kafka.cruisecontrol.executor;
 import com.linkedin.cruisecontrol.common.utils.Utils;
 import com.linkedin.kafka.cruisecontrol.KafkaCruiseControlUtils;
 import com.linkedin.kafka.cruisecontrol.config.KafkaCruiseControlConfig;
+import com.linkedin.kafka.cruisecontrol.config.constants.ExecutorConfig;
 import com.linkedin.kafka.cruisecontrol.executor.concurrency.ExecutionConcurrencyManager;
 import com.linkedin.kafka.cruisecontrol.executor.strategy.BaseReplicaMovementStrategy;
 import com.linkedin.kafka.cruisecontrol.executor.strategy.ReplicaMovementStrategy;
@@ -80,6 +81,7 @@ public class ExecutionTaskPlanner {
   private final long _taskExecutionAlertingThresholdMs;
   private final double _interBrokerReplicaMovementRateAlertingThreshold;
   private final double _intraBrokerReplicaMovementRateAlertingThreshold;
+  private final long _maxInterBrokerPartitionMovementDataPerSourceBrokerMB;
   private static final int PRIORITIZE_BROKER_1 = -1;
   private static final int PRIORITIZE_BROKER_2 = 1;
   private static final int PRIORITIZE_NONE = 0;
@@ -100,6 +102,8 @@ public class ExecutionTaskPlanner {
     _taskExecutionAlertingThresholdMs = config.getLong(TASK_EXECUTION_ALERTING_THRESHOLD_MS_CONFIG);
     _interBrokerReplicaMovementRateAlertingThreshold = config.getDouble(INTER_BROKER_REPLICA_MOVEMENT_RATE_ALERTING_THRESHOLD_CONFIG);
     _intraBrokerReplicaMovementRateAlertingThreshold = config.getDouble(INTRA_BROKER_REPLICA_MOVEMENT_RATE_ALERTING_THRESHOLD_CONFIG);
+    _maxInterBrokerPartitionMovementDataPerSourceBrokerMB =
+        config.getLong(ExecutorConfig.MAX_INTER_BROKER_PARTITION_MOVEMENT_DATA_PER_SOURCE_BROKER_MB_CONFIG);
     _adminClient = adminClient;
     List<String> defaultReplicaMovementStrategies = config.getList(DEFAULT_REPLICA_MOVEMENT_STRATEGIES_CONFIG);
     if (defaultReplicaMovementStrategies == null || defaultReplicaMovementStrategies.isEmpty()) {
@@ -362,6 +366,7 @@ public class ExecutionTaskPlanner {
     interPartMoveBrokerIds.addAll(_interPartMoveTasksByBrokerId.keySet());
     Set<Integer> brokerInvolved = new HashSet<>();
     Set<TopicPartition> partitionsInvolved = new HashSet<>();
+    Map<Integer, Long> selectedDataBySourceBroker = new HashMap<>();
 
     int numInProgressPartitions = inProgressPartitions.size();
     boolean maxPartitionMovesReached = false;
@@ -407,8 +412,12 @@ public class ExecutionTaskPlanner {
           if (isExecutableProposal(task.proposal(), readyBrokers)
               && !inProgressPartitions.contains(tp)
               && !partitionsInvolved.contains(tp)) {
+            if (!withinInterBrokerPartitionMovementDataBudget(task.proposal(), sourceBroker, selectedDataBySourceBroker)) {
+              continue;
+            }
             partitionsInvolved.add(tp);
             executableReplicaMovements.add(task);
+            selectedDataBySourceBroker.merge(sourceBroker, task.proposal().dataToMoveInMB(), Long::sum);
             // Record the brokers as involved in this round and stop involving them again in this round.
             brokerInvolved.add(sourceBroker);
             brokerInvolved.addAll(destinationBrokers);
@@ -436,6 +445,19 @@ public class ExecutionTaskPlanner {
       }
     }
     return executableReplicaMovements;
+  }
+
+  private boolean withinInterBrokerPartitionMovementDataBudget(ExecutionProposal proposal,
+                                                               int sourceBroker,
+                                                               Map<Integer, Long> selectedDataBySourceBroker) {
+    if (_maxInterBrokerPartitionMovementDataPerSourceBrokerMB <= 0 || !selectedDataBySourceBroker.containsKey(sourceBroker)) {
+      return true;
+    }
+    if (proposal.dataToMoveInMB() == 0) {
+      return true;
+    }
+    return selectedDataBySourceBroker.get(sourceBroker) + proposal.dataToMoveInMB()
+           <= _maxInterBrokerPartitionMovementDataPerSourceBrokerMB;
   }
 
   /**

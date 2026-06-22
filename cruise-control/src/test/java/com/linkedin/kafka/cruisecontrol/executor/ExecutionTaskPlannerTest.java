@@ -362,6 +362,96 @@ public class ExecutionTaskPlannerTest {
   }
 
   @Test
+  public void testInterBrokerPartitionMovementDataBudgetPerSourceBroker() {
+    ExecutionProposal source0Small =
+        new ExecutionProposal(new TopicPartition(TOPIC3, 10), 10, _r0, List.of(_r0, _r2), List.of(_r2, _r3));
+    ExecutionProposal source0Medium =
+        new ExecutionProposal(new TopicPartition(TOPIC3, 11), 20, _r0, List.of(_r0, _r4), List.of(_r4, _r5));
+    ExecutionProposal source1Medium =
+        new ExecutionProposal(new TopicPartition(TOPIC3, 12), 20, _r1, List.of(_r1, _r2), List.of(_r2, _r4));
+    List<ExecutionProposal> proposals = List.of(source0Small, source0Medium, source1Medium);
+
+    Properties props = KafkaCruiseControlUnitTestUtils.getKafkaCruiseControlProperties();
+    props.setProperty(ExecutorConfig.MAX_INTER_BROKER_PARTITION_MOVEMENT_DATA_PER_SOURCE_BROKER_MB_CONFIG, "25");
+    props.setProperty(ExecutorConfig.DEFAULT_REPLICA_MOVEMENT_STRATEGIES_CONFIG, BaseReplicaMovementStrategy.class.getName());
+    ExecutionTaskPlanner planner = new ExecutionTaskPlanner(null, new KafkaCruiseControlConfig(props));
+    planner.addExecutionProposals(proposals, strategyOptionsForProposals(proposals), null);
+
+    List<ExecutionTask> firstBatch = planner.getInterBrokerReplicaMovementTasks(readyBrokers(6, 10), Collections.emptySet(),
+                                                                                _defaultPartitionsMaxCap);
+    assertEquals(Set.of(source0Small, source1Medium), proposalsForTasks(firstBatch));
+
+    List<ExecutionTask> secondBatch = planner.getInterBrokerReplicaMovementTasks(readyBrokers(6, 10), Collections.emptySet(),
+                                                                                 _defaultPartitionsMaxCap);
+    assertEquals(Collections.singleton(source0Medium), proposalsForTasks(secondBatch));
+  }
+
+  @Test
+  public void testInterBrokerPartitionMovementDataBudgetAllowsFirstOversizedTask() {
+    ExecutionProposal oversized =
+        new ExecutionProposal(new TopicPartition(TOPIC3, 20), 30, _r0, List.of(_r0, _r2), List.of(_r2, _r3));
+    ExecutionProposal followUp =
+        new ExecutionProposal(new TopicPartition(TOPIC3, 21), 10, _r0, List.of(_r0, _r4), List.of(_r4, _r5));
+    List<ExecutionProposal> proposals = List.of(oversized, followUp);
+
+    Properties props = KafkaCruiseControlUnitTestUtils.getKafkaCruiseControlProperties();
+    props.setProperty(ExecutorConfig.MAX_INTER_BROKER_PARTITION_MOVEMENT_DATA_PER_SOURCE_BROKER_MB_CONFIG, "25");
+    props.setProperty(ExecutorConfig.DEFAULT_REPLICA_MOVEMENT_STRATEGIES_CONFIG, BaseReplicaMovementStrategy.class.getName());
+    ExecutionTaskPlanner planner = new ExecutionTaskPlanner(null, new KafkaCruiseControlConfig(props));
+    planner.addExecutionProposals(proposals, strategyOptionsForProposals(proposals), null);
+
+    List<ExecutionTask> firstBatch = planner.getInterBrokerReplicaMovementTasks(readyBrokers(6, 10), Collections.emptySet(),
+                                                                                _defaultPartitionsMaxCap);
+    assertEquals(Collections.singleton(oversized), proposalsForTasks(firstBatch));
+
+    List<ExecutionTask> secondBatch = planner.getInterBrokerReplicaMovementTasks(readyBrokers(6, 10), Collections.emptySet(),
+                                                                                 _defaultPartitionsMaxCap);
+    assertEquals(Collections.singleton(followUp), proposalsForTasks(secondBatch));
+  }
+
+  @Test
+  public void testInterBrokerPartitionMovementDataBudgetAllowsZeroDataTasksAfterOversizedTask() {
+    ExecutionProposal oversized =
+        new ExecutionProposal(new TopicPartition(TOPIC3, 25), 30, _r0, List.of(_r0, _r2), List.of(_r2, _r3));
+    ExecutionProposal zeroDataReorder =
+        new ExecutionProposal(new TopicPartition(TOPIC3, 26), 30, _r0, List.of(_r0, _r2), List.of(_r2, _r0));
+    ExecutionProposal followUp =
+        new ExecutionProposal(new TopicPartition(TOPIC3, 27), 10, _r0, List.of(_r0, _r4), List.of(_r4, _r5));
+    List<ExecutionProposal> proposals = List.of(oversized, zeroDataReorder, followUp);
+
+    Properties props = KafkaCruiseControlUnitTestUtils.getKafkaCruiseControlProperties();
+    props.setProperty(ExecutorConfig.MAX_INTER_BROKER_PARTITION_MOVEMENT_DATA_PER_SOURCE_BROKER_MB_CONFIG, "25");
+    props.setProperty(ExecutorConfig.DEFAULT_REPLICA_MOVEMENT_STRATEGIES_CONFIG, BaseReplicaMovementStrategy.class.getName());
+    ExecutionTaskPlanner planner = new ExecutionTaskPlanner(null, new KafkaCruiseControlConfig(props));
+    planner.addExecutionProposals(proposals, strategyOptionsForProposals(proposals), null);
+
+    List<ExecutionTask> firstBatch = planner.getInterBrokerReplicaMovementTasks(readyBrokers(6, 10), Collections.emptySet(),
+                                                                                _defaultPartitionsMaxCap);
+    assertEquals(Set.of(oversized, zeroDataReorder), proposalsForTasks(firstBatch));
+
+    List<ExecutionTask> secondBatch = planner.getInterBrokerReplicaMovementTasks(readyBrokers(6, 10), Collections.emptySet(),
+                                                                                 _defaultPartitionsMaxCap);
+    assertEquals(Collections.singleton(followUp), proposalsForTasks(secondBatch));
+  }
+
+  @Test
+  public void testInterBrokerPartitionMovementDataBudgetDisabledByDefault() {
+    ExecutionProposal source0Small =
+        new ExecutionProposal(new TopicPartition(TOPIC3, 30), 10, _r0, List.of(_r0, _r2), List.of(_r2, _r3));
+    ExecutionProposal source0Medium =
+        new ExecutionProposal(new TopicPartition(TOPIC3, 31), 20, _r0, List.of(_r0, _r4), List.of(_r4, _r5));
+    List<ExecutionProposal> proposals = List.of(source0Small, source0Medium);
+
+    ExecutionTaskPlanner planner =
+        new ExecutionTaskPlanner(null, new KafkaCruiseControlConfig(KafkaCruiseControlUnitTestUtils.getKafkaCruiseControlProperties()));
+    planner.addExecutionProposals(proposals, strategyOptionsForProposals(proposals), null);
+
+    List<ExecutionTask> firstBatch = planner.getInterBrokerReplicaMovementTasks(readyBrokers(6, 10), Collections.emptySet(),
+                                                                                _defaultPartitionsMaxCap);
+    assertEquals(Set.of(source0Small, source0Medium), proposalsForTasks(firstBatch));
+  }
+
+  @Test
   public void testDynamicConfigReplicaMovementStrategy() {
     List<ExecutionProposal> proposals = new ArrayList<>();
     proposals.add(_partitionMovement0);
@@ -537,5 +627,26 @@ public class ExecutionTaskPlannerTest {
     return new PartitionInfo(proposal.topicPartition().topic(),
                              proposal.topicPartition().partition(), isrArray[0], isrArray,
                              isPartitionURP ? Arrays.copyOf(isrArray, 1) : isrArray);
+  }
+
+  private StrategyOptions strategyOptionsForProposals(List<ExecutionProposal> proposals) {
+    Set<PartitionInfo> partitions = new HashSet<>();
+    proposals.forEach(proposal -> partitions.add(generatePartitionInfo(proposal, false)));
+    Cluster expectedCluster = new Cluster(null, _rf4ExpectedNodes, partitions, Collections.emptySet(), Collections.emptySet());
+    return new StrategyOptions.Builder(expectedCluster).build();
+  }
+
+  private Map<Integer, Integer> readyBrokers(int numBrokers, int brokerConcurrency) {
+    Map<Integer, Integer> readyBrokers = new HashMap<>();
+    for (int brokerId = 0; brokerId < numBrokers; brokerId++) {
+      readyBrokers.put(brokerId, brokerConcurrency);
+    }
+    return readyBrokers;
+  }
+
+  private Set<ExecutionProposal> proposalsForTasks(List<ExecutionTask> tasks) {
+    Set<ExecutionProposal> proposals = new HashSet<>();
+    tasks.forEach(task -> proposals.add(task.proposal()));
+    return proposals;
   }
 }

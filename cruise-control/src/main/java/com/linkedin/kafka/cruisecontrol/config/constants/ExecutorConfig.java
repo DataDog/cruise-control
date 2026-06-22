@@ -86,6 +86,16 @@ public final class ExecutorConfig {
       + "max.num.cluster.partition.movements throttles the maximum partition movements across the cluster";
 
   /**
+   * <code>max.inter.broker.partition.movement.data.per.source.broker.mb</code>
+   */
+  public static final String MAX_INTER_BROKER_PARTITION_MOVEMENT_DATA_PER_SOURCE_BROKER_MB_CONFIG =
+      "max.inter.broker.partition.movement.data.per.source.broker.mb";
+  public static final long DEFAULT_MAX_INTER_BROKER_PARTITION_MOVEMENT_DATA_PER_SOURCE_BROKER_MB = 0L;
+  public static final String MAX_INTER_BROKER_PARTITION_MOVEMENT_DATA_PER_SOURCE_BROKER_MB_DOC = "The maximum amount "
+      + "of data in MB selected from the same source broker for inter-broker partition movement tasks in a single executor "
+      + "batch. Set to 0 to disable this limit.";
+
+  /**
    * <code>default.replication.throttle</code>
    */
   public static final String DEFAULT_REPLICATION_THROTTLE_CONFIG = "default.replication.throttle";
@@ -543,6 +553,12 @@ public final class ExecutorConfig {
                             atLeast(1),
                             ConfigDef.Importance.MEDIUM,
                             MAX_NUM_CLUSTER_PARTITION_MOVEMENTS_DOC)
+                    .define(MAX_INTER_BROKER_PARTITION_MOVEMENT_DATA_PER_SOURCE_BROKER_MB_CONFIG,
+                            ConfigDef.Type.LONG,
+                            DEFAULT_MAX_INTER_BROKER_PARTITION_MOVEMENT_DATA_PER_SOURCE_BROKER_MB,
+                            atLeast(0),
+                            ConfigDef.Importance.MEDIUM,
+                            MAX_INTER_BROKER_PARTITION_MOVEMENT_DATA_PER_SOURCE_BROKER_MB_DOC)
                     .define(DEFAULT_REPLICATION_THROTTLE_CONFIG,
                             ConfigDef.Type.LONG,
                             DEFAULT_DEFAULT_REPLICATION_THROTTLE,
